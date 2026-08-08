@@ -1,4 +1,7 @@
+import { useTheme } from '../../theme/ThemeContext.jsx';
+
 export default function NukkoWordmark({ size = 48, style = {} }) {
+  const { theme } = useTheme();
   return (
     <div style={{
       fontFamily: '"Fredoka", "Nunito", system-ui, sans-serif',
@@ -6,11 +9,11 @@ export default function NukkoWordmark({ size = 48, style = {} }) {
       fontSize: size,
       letterSpacing: '0.06em',
       lineHeight: 1,
-      background: 'linear-gradient(135deg, #fff 0%, #ffd700 50%, #00d4ff 100%)',
+      background: theme.wordmarkGradient,
       WebkitBackgroundClip: 'text',
       WebkitTextFillColor: 'transparent',
       backgroundClip: 'text',
-      filter: 'drop-shadow(0 0 20px rgba(123,47,255,0.5))',
+      filter: `drop-shadow(0 0 20px rgba(${theme.glowRGB},0.5))`,
       ...style,
     }}>
       NUKKO

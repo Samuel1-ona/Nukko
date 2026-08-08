@@ -1,11 +1,13 @@
 import { XLogoIcon } from './Icons.jsx';
 import { X_HANDLE, openXProfile } from '../../utils/social.js';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 /**
  * Occasional "follow us on X" prompt. Frequency gating lives in
  * utils/social.js — this component only renders and handles the two actions.
  */
 export default function FollowXModal({ onClose, onFollowed }) {
+  const { theme } = useTheme();
   const handleFollow = () => {
     openXProfile();
     onFollowed?.();
@@ -32,7 +34,7 @@ export default function FollowXModal({ onClose, onFollowed }) {
           background: 'linear-gradient(160deg, #1a0b32 0%, #0f0520 100%)',
           border: '1px solid rgba(255,255,255,0.09)',
           borderRadius: 24,
-          boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(123,47,255,0.15)',
+          boxShadow: `0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(${theme.primaryRGB},0.15)`,
           animation: 'nukko-score-pop 0.22s cubic-bezier(.22,1,.36,1)',
           overflow: 'hidden',
         }}
@@ -44,8 +46,8 @@ export default function FollowXModal({ onClose, onFollowed }) {
         }}>
           <div style={{
             width: 48, height: 48, borderRadius: 16,
-            background: 'rgba(123,47,255,0.15)',
-            border: '1px solid rgba(123,47,255,0.3)',
+            background: `rgba(${theme.primaryRGB},0.15)`,
+            border: `1px solid rgba(${theme.primaryRGB},0.3)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: 4,
           }}>
@@ -61,7 +63,7 @@ export default function FollowXModal({ onClose, onFollowed }) {
             fontFamily: '"Nunito", system-ui', fontSize: 13, lineHeight: 1.55,
             color: 'rgba(255,255,255,0.55)', textAlign: 'center',
           }}>
-            Follow <span style={{ color: '#00d4ff', fontWeight: 700 }}>{X_HANDLE}</span> on X
+            Follow <span style={{ color: theme.secondary, fontWeight: 700 }}>{X_HANDLE}</span> on X
             for updates, events and cosmic drops 🪐
           </div>
         </div>
@@ -72,11 +74,11 @@ export default function FollowXModal({ onClose, onFollowed }) {
             onClick={handleFollow}
             style={{
               height: 52, borderRadius: 16, border: 'none',
-              background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+              background: theme.gradient,
               color: '#fff', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 15,
-              boxShadow: '0 10px 30px -8px rgba(123,47,255,0.6), inset 0 1px 0 rgba(255,255,255,0.25)',
+              boxShadow: `0 10px 30px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`,
             }}
           >
             <XLogoIcon size={14} />

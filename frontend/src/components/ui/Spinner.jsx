@@ -1,4 +1,7 @@
+import { useTheme } from '../../theme/ThemeContext.jsx';
+
 export default function Spinner({ text = '', inline = false }) {
+  const { theme } = useTheme();
   if (inline) {
     return (
       <div style={{
@@ -15,7 +18,7 @@ export default function Spinner({ text = '', inline = false }) {
       <div style={{
         width: 44, height: 44, borderRadius: '50%',
         border: '3px solid rgba(255,255,255,0.1)',
-        borderTopColor: '#00d4ff',
+        borderTopColor: theme.secondary,
         animation: 'nukko-spin 0.8s linear infinite',
       }} />
       {text && (

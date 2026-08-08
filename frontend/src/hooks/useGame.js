@@ -9,7 +9,7 @@ const MAX_W         = 440;
 const EXPAND_PX     = 30;
 const H             = 480;
 const WALL          = 60;
-const DANGER_Y      = 105;
+const DANGER_Y      = 85;
 const DROP_COOLDOWN = 380;
 const CHAIN_WINDOW  = 450; // ms — merges within this window count as a chain
 const CHAIN_MAX     = 8;   // multiplier cap
@@ -43,9 +43,10 @@ function haptic(pattern) {
   try { navigator.vibrate?.(pattern); } catch (_) {}
 }
 
-export function useGame(onScorePts, onToast, onAddTime, audio) {
+export function useGame(onScorePts, onToast, onAddTime, audio, themeColors) {
   const canvasRef = useRef(null);
   const ctxRef    = useRef(null); // cached 2D context
+  const themeRef  = useRef(themeColors);
 
   const engineRef     = useRef(null);
   const worldRef      = useRef(null);
@@ -107,6 +108,12 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
   useEffect(() => { onToastRef.current   = onToast;    }, [onToast]);
   useEffect(() => { onAddTimeRef.current = onAddTime;  }, [onAddTime]);
   useEffect(() => { audioRef.current     = audio;      }, [audio]);
+  // Ambient canvas colors only — power-up FX (bomb/expand/time) keep their
+  // own fixed semantic colors regardless of theme.
+  useEffect(() => {
+    themeRef.current = themeColors;
+    gradCacheRef.current = {}; // invalidate cached gradients on theme change
+  }, [themeColors]);
 
   const [currentIdx,     setCurrentIdx]     = useState(() => randFruitIdx());
   const [nextIdx,        setNextIdx]        = useState(() => randFruitIdx());
@@ -194,17 +201,39 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     ctx.fillStyle = '#050009';
     ctx.fillRect(0, 0, cw, H);
 
-    // ── Danger flash — red vignette pulsing over entire canvas ───────────────
-    if (isDangerRef.current) {
-      const pulse = 0.5 + 0.5 * Math.sin((now / 280) * Math.PI);
-      // radial vignette: transparent centre → red edges
+    // ── Danger state (computed early so both the approach-warning tint below
+    // and the hazard barrier/badge/gauge later in the frame share one value) ──
+    const bodies = bodiesRef.current;
+    let minBodyTop = H;
+    for (const b of bodies) {
+      const top = b.position.y - FRUITS[b.fruitIdx].r;
+      if (top < minBodyTop) minBodyTop = top;
+    }
+    const isInDanger = minBodyTop < DANGER_Y && bodies.some(
+      b => b.speed < 2.0 && b.position.y - FRUITS[b.fruitIdx].r < DANGER_Y,
+    );
+    // Trigger/stop danger heartbeat audio
+    if (isInDanger && !isDangerRef.current) {
+      isDangerRef.current = true;
+      audioRef.current?.startDanger?.();
+    } else if (!isInDanger && isDangerRef.current) {
+      isDangerRef.current = false;
+      audioRef.current?.stopDanger?.();
+    }
+    const stackFill = Math.max(0, Math.min(1, (H - minBodyTop) / (H - DANGER_Y)));
+
+    // ── Approach-warning tint — ramps in smoothly well before the stack
+    // actually breaches the line, so the player gets an early, gentle cue
+    // instead of a sudden flash right at game-over. Capped low so it never
+    // reads as aggressive strobing.
+    const warnStart = 0.55;
+    if (stackFill > warnStart) {
+      const warnT = Math.min(1, (stackFill - warnStart) / (1 - warnStart));
+      const alpha = warnT * warnT * 0.22;
       const vg = ctx.createRadialGradient(cw / 2, H / 2, Math.min(cw, H) * 0.18, cw / 2, H / 2, Math.max(cw, H) * 0.85);
       vg.addColorStop(0, 'rgba(255,20,20,0)');
-      vg.addColorStop(1, `rgba(255,20,20,${0.32 * pulse})`);
+      vg.addColorStop(1, `rgba(255,20,20,${alpha})`);
       ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, cw, H);
-      // thin overall tint so even the centre isn't clean white
-      ctx.fillStyle = `rgba(255,0,0,${0.06 * pulse})`;
       ctx.fillRect(0, 0, cw, H);
     }
 
@@ -233,7 +262,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     let bottomGlow = gradCacheRef.current[bgKey + '-bottom'];
     if (!bottomGlow) {
       bottomGlow = ctx.createRadialGradient(cw / 2, H, 0, cw / 2, H, cw * 0.9);
-      bottomGlow.addColorStop(0, 'rgba(123,47,255,0.2)');
+      bottomGlow.addColorStop(0, themeRef.current?.canvasBottomGlow ?? 'rgba(255,46,158,0.2)');
       bottomGlow.addColorStop(1, 'rgba(0,0,0,0)');
       gradCacheRef.current[bgKey + '-bottom'] = bottomGlow;
     }
@@ -259,53 +288,65 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       ctx.globalAlpha = 1;
     }
 
-    // ── Danger state (updated for audio side-effects) ─────────────────────────
-    const bodies = bodiesRef.current;
-    let minBodyTop = H;
-    for (const b of bodies) {
-      const top = b.position.y - FRUITS[b.fruitIdx].r;
-      if (top < minBodyTop) minBodyTop = top;
-    }
-    const isInDanger = minBodyTop < DANGER_Y && bodies.some(
-      b => b.speed < 2.0 && b.position.y - FRUITS[b.fruitIdx].r < DANGER_Y,
-    );
-    // Trigger/stop danger heartbeat audio
-    if (isInDanger && !isDangerRef.current) {
-      isDangerRef.current = true;
-      audioRef.current?.startDanger?.();
-    } else if (!isInDanger && isDangerRef.current) {
-      isDangerRef.current = false;
-      audioRef.current?.stopDanger?.();
-    }
-
-    const stackFill = Math.max(0, Math.min(1, (H - minBodyTop) / (H - DANGER_Y)));
-
-    // ── Danger line + badge ───────────────────────────────────────────────────
+    // ── Danger hazard-stripe barrier + badge ─────────────────────────────────
+    const bandH = isInDanger ? 12 : 10;
+    const bandTop = DANGER_Y - bandH / 2;
     ctx.save();
-    ctx.setLineDash([6, 8]);
-    ctx.strokeStyle = `rgba(255,59,59,${isInDanger ? 0.95 : 0.55})`;
-    ctx.lineWidth = isInDanger ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.rect(0, bandTop, cw, bandH);
+    ctx.clip();
+    ctx.fillStyle = isInDanger ? 'rgba(26,0,0,0.85)' : 'rgba(20,0,0,0.35)';
+    ctx.fillRect(0, bandTop, cw, bandH);
+    const stripeW = 12;
+    const scrollSpeed = isInDanger ? 0.045 : 0.012;
+    const scrollOffset = (now * scrollSpeed) % (stripeW * 2);
+    ctx.strokeStyle = isInDanger ? '#ff3b3b' : 'rgba(255,59,59,0.55)';
+    ctx.lineWidth = stripeW;
     if (isInDanger) { ctx.shadowBlur = 10; ctx.shadowColor = '#ff3b3b'; }
-    ctx.beginPath(); ctx.moveTo(8, DANGER_Y); ctx.lineTo(cw - 8, DANGER_Y); ctx.stroke();
+    for (let x = -bandH - stripeW * 2 + scrollOffset; x < cw + bandH; x += stripeW * 2) {
+      ctx.beginPath();
+      ctx.moveTo(x, bandTop + bandH);
+      ctx.lineTo(x + bandH + stripeW, bandTop);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = isInDanger ? '#ff3b3b' : 'rgba(255,59,59,0.8)';
+    ctx.lineWidth = isInDanger ? 2 : 1.2;
+    if (isInDanger) { ctx.shadowBlur = 12; ctx.shadowColor = '#ff3b3b'; }
+    ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(cw, DANGER_Y); ctx.stroke();
     ctx.shadowBlur = 0; ctx.restore();
 
     ctx.save();
-    ctx.font = 'bold 8px "Space Mono", monospace';
+    ctx.font = 'bold 10px "Space Mono", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const badgeLabel = '▲ DANGER ZONE';
+    const badgeLabel = 'DANGER ZONE';
     const bw = ctx.measureText(badgeLabel).width;
-    const bx = cw / 2, by = DANGER_Y - 11;
-    const bpx = 6, bpy = 3;
-    ctx.fillStyle = isInDanger ? '#ff3b3b' : 'rgba(255,59,59,0.18)';
-    if (isInDanger) { ctx.shadowBlur = 14; ctx.shadowColor = 'rgba(255,59,59,0.7)'; }
+    const bx = cw / 2, by = bandTop - 13;
+    const iconW = 14;
+    const bpx = 10, bpy = 5;
+    const pillW = bw + iconW + bpx * 2 + 4;
+    const pillH = (bpy + 4) * 2;
+    ctx.fillStyle = isInDanger ? '#ff3b3b' : 'rgba(30,0,0,0.9)';
+    ctx.strokeStyle = isInDanger ? '#fff' : 'rgba(255,59,59,0.7)';
+    ctx.lineWidth = 1.5;
+    if (isInDanger) { ctx.shadowBlur = 16; ctx.shadowColor = 'rgba(255,59,59,0.9)'; }
     ctx.beginPath();
-    ctx.roundRect(bx - bw / 2 - bpx, by - bpy - 2, bw + bpx * 2, (bpy + 2) * 2, 8);
-    ctx.fill(); ctx.shadowBlur = 0;
-    ctx.setLineDash([]);
-    ctx.strokeStyle = isInDanger ? 'rgba(255,59,59,0.9)' : 'rgba(255,59,59,0.45)';
-    ctx.lineWidth = 0.75; ctx.stroke();
-    ctx.fillStyle = isInDanger ? '#fff' : 'rgba(255,175,175,0.85)';
-    ctx.fillText(badgeLabel, bx, by);
+    ctx.roundRect(bx - pillW / 2, by - pillH / 2, pillW, pillH, pillH / 2);
+    ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+    // Warning triangle icon, left of the label
+    const triCx = bx - pillW / 2 + bpx + iconW / 2 - 2, triCy = by;
+    ctx.fillStyle = isInDanger ? '#fff' : '#ff3b3b';
+    ctx.beginPath();
+    ctx.moveTo(triCx, triCy - 5); ctx.lineTo(triCx + 5, triCy + 4); ctx.lineTo(triCx - 5, triCy + 4);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = isInDanger ? '#ff3b3b' : (isInDanger ? '#fff' : 'rgba(30,0,0,0.9)');
+    ctx.fillRect(triCx - 0.6, triCy - 2, 1.2, 3.6);
+    ctx.fillRect(triCx - 0.6, triCy + 2, 1.2, 1.2);
+    ctx.fillStyle = isInDanger ? '#fff' : 'rgba(255,180,180,0.95)';
+    ctx.fillText(badgeLabel, bx + iconW / 2, by);
     ctx.restore();
 
     // ── Drop indicator ───────────────────────────────────────────────────────
@@ -640,9 +681,9 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       }
     }
 
-    // ── Danger vignette ──────────────────────────────────────────────────────
+    // ── Danger vignette — gentle, slow pulse once actually over the line ─────
     if (isInDanger) {
-      const pulse = 0.22 + 0.14 * Math.sin(now / 340);
+      const pulse = 0.18 + 0.1 * Math.sin(now / 520);
       const dv = ctx.createRadialGradient(cw / 2, H / 2, H * 0.26, cw / 2, H / 2, H * 0.76);
       dv.addColorStop(0, 'rgba(0,0,0,0)');
       dv.addColorStop(1, `rgba(255,59,59,${pulse})`);
@@ -663,7 +704,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       const gg = ctx.createLinearGradient(0, gbot, 0, gbot - fh);
       if (isInDanger)           { gg.addColorStop(0, '#ff3b3b'); gg.addColorStop(1, '#ff8a8a'); }
       else if (stackFill > 0.6) { gg.addColorStop(0, '#ffd700'); gg.addColorStop(1, '#ff8a4a'); }
-      else                      { gg.addColorStop(0, '#00d4ff'); gg.addColorStop(1, '#7b2fff'); }
+      else                      { gg.addColorStop(0, themeRef.current?.secondary ?? '#00d4ff'); gg.addColorStop(1, themeRef.current?.primary ?? '#ff2e9e'); }
       ctx.fillStyle = gg;
       ctx.beginPath(); ctx.roundRect(gx - gaugeW / 2, gbot - fh, gaugeW, fh, 2); ctx.fill();
     }

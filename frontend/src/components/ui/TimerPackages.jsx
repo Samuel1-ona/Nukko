@@ -1,4 +1,5 @@
 import { STABLECOIN_KEYS, STABLECOINS } from '../../blockchain/tokens.js';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 const LABELS = ['Orbit', 'Galaxy', 'Supernova'];
 
@@ -8,6 +9,7 @@ function fmtBalance(raw, decimals) {
 }
 
 export default function TimerPackages({ packages, onPurchase, loading, selectedToken, onSelectToken, balances = {} }) {
+  const { theme } = useTheme();
   return (
     <div>
       {/* Token selector */}
@@ -53,9 +55,9 @@ export default function TimerPackages({ packages, onPurchase, loading, selectedT
               style={{
                 flex: 1, padding: '10px 6px',
                 background: isHighlight
-                  ? 'linear-gradient(135deg, rgba(123,47,255,0.5), rgba(0,212,255,0.4))'
+                  ? `linear-gradient(135deg, rgba(${theme.primaryRGB},0.5), rgba(${theme.secondaryRGB},0.4))`
                   : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${isHighlight ? 'rgba(0,212,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                border: `1px solid ${isHighlight ? `rgba(${theme.secondaryRGB},0.5)` : 'rgba(255,255,255,0.1)'}`,
                 borderRadius: 14,
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                 cursor: loading ? 'not-allowed' : 'pointer',

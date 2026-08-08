@@ -1,7 +1,9 @@
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import NukkoMascot      from '../ui/NukkoMascot.jsx';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
 
 export default function Submitting({ score }) {
+  const { theme } = useTheme();
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
       <CosmicBackground intensity="medium">
@@ -20,7 +22,7 @@ export default function Submitting({ score }) {
                 width: 150 + i * 44, height: 150 + i * 44,
                 transform: 'translate(-50%,-50%)',
                 borderRadius: '50%',
-                border: `1px solid rgba(${i === 0 ? '0,212,255' : i === 1 ? '123,47,255' : '167,139,255'},${0.45 - i * 0.1})`,
+                border: `1px solid rgba(${i === 0 ? theme.secondaryRGB : i === 1 ? theme.primaryRGB : '167,139,255'},${0.45 - i * 0.1})`,
                 animation: `nukko-ripple 2.2s ease-out ${i * 0.45}s infinite`,
               }} />
             ))}

@@ -1,4 +1,7 @@
+import { useTheme } from '../../theme/ThemeContext.jsx';
+
 export default function NukkoMascot({ size = 140, pose = 'idle', style = {} }) {
+  const { theme } = useTheme();
   const s = size;
   const cx = s / 2;
   const cy = s / 2;
@@ -18,7 +21,7 @@ export default function NukkoMascot({ size = 140, pose = 'idle', style = {} }) {
     <div style={{
       width: s, height: s, position: 'relative',
       animation,
-      filter: `drop-shadow(0 ${s * 0.06}px ${s * 0.1}px rgba(123,47,255,0.5))`,
+      filter: `drop-shadow(0 ${s * 0.06}px ${s * 0.1}px rgba(${theme.glowRGB},0.5))`,
       ...style,
     }}>
       <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{ overflow: 'visible' }}>

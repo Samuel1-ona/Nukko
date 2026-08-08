@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 export default function CosmicBackground({ intensity = 'medium', dimmed = false, children, style = {} }) {
+  const { theme } = useTheme();
   const blobOp  = intensity === 'lush' ? 0.7 : intensity === 'medium' ? 0.5 : 0.3;
   const starCount = intensity === 'lush' ? 70 : intensity === 'medium' ? 50 : 30;
 
@@ -16,23 +18,23 @@ export default function CosmicBackground({ intensity = 'medium', dimmed = false,
   return (
     <div style={{
       position: 'absolute', inset: 0, overflow: 'hidden',
-      background: 'radial-gradient(ellipse at 50% 0%, #1f0540 0%, #0a0015 70%)',
+      background: theme.bgGradient,
       ...style,
     }}>
       {/* nebula blobs */}
       <div style={{
         position: 'absolute', top: '-10%', left: '-20%', width: '90%', height: '70%',
-        background: 'radial-gradient(circle, rgba(123,47,255,0.55) 0%, rgba(123,47,255,0) 60%)',
+        background: `radial-gradient(circle, ${theme.blob1} 0%, transparent 60%)`,
         opacity: blobOp, filter: 'blur(20px)', pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', top: '20%', right: '-25%', width: '90%', height: '70%',
-        background: 'radial-gradient(circle, rgba(0,212,255,0.45) 0%, rgba(0,212,255,0) 60%)',
+        background: `radial-gradient(circle, ${theme.blob2} 0%, transparent 60%)`,
         opacity: blobOp, filter: 'blur(20px)', pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', bottom: '-10%', left: '10%', width: '90%', height: '60%',
-        background: 'radial-gradient(circle, rgba(255,107,138,0.35) 0%, rgba(255,107,138,0) 60%)',
+        background: `radial-gradient(circle, ${theme.blob3} 0%, transparent 60%)`,
         opacity: blobOp * 0.8, filter: 'blur(20px)', pointerEvents: 'none',
       }} />
 

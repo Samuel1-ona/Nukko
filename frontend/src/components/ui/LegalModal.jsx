@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 const SUPPORT_EMAIL = 'studioscracked@gmail.com';
 const ABOUT_URL     = 'https://crackedstudios.xyz';
@@ -372,6 +373,7 @@ function PrivacyContent() {
 // ── About ────────────────────────────────────────────────────────────────────
 
 function AboutBody({ onClose }) {
+  const { theme } = useTheme();
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -379,15 +381,15 @@ function AboutBody({ onClose }) {
     }}>
       <div style={{
         width: '100%', maxWidth: 280,
-        background: 'rgba(123,47,255,0.15)',
-        border: '1px solid rgba(123,47,255,0.35)',
+        background: `rgba(${theme.primaryRGB},0.15)`,
+        border: `1px solid rgba(${theme.primaryRGB},0.35)`,
         borderRadius: 16, padding: '18px 20px',
         textAlign: 'center',
       }}>
         <div style={{
           fontFamily: '"Nunito", system-ui', fontWeight: 900,
           fontSize: 28, letterSpacing: '-0.02em',
-          background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+          background: theme.gradient,
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
         }}>
           Nukko
@@ -419,7 +421,7 @@ function AboutBody({ onClose }) {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             height: 50, borderRadius: 14, textDecoration: 'none',
-            background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+            background: theme.gradient,
             fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 13,
             color: '#fff', letterSpacing: '0.04em',
           }}
@@ -456,6 +458,7 @@ const MODAL_META = {
 // ── Main modal ───────────────────────────────────────────────────────────────
 
 export default function LegalModal({ type, onClose }) {
+  const { theme } = useTheme();
   const isOpen = type !== null;
 
   // Lock body scroll
@@ -500,10 +503,10 @@ export default function LegalModal({ type, onClose }) {
           height: type === 'about' ? 'auto' : '90dvh',
           maxHeight: '90dvh',
           background: 'linear-gradient(180deg, #110526 0%, #0a0015 100%)',
-          border: '1px solid rgba(123,47,255,0.35)',
+          border: `1px solid rgba(${theme.primaryRGB},0.35)`,
           borderBottom: 'none',
           borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -12px 48px rgba(123,47,255,0.25)',
+          boxShadow: `0 -12px 48px rgba(${theme.primaryRGB},0.25)`,
           animation: 'legalSlideUp 280ms cubic-bezier(0.22,1,0.36,1) both',
         }}
       >

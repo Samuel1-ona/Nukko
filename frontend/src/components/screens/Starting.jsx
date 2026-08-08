@@ -1,7 +1,9 @@
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import NukkoMascot      from '../ui/NukkoMascot.jsx';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
 
 export default function Starting() {
+  const { theme } = useTheme();
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
       <CosmicBackground intensity="medium">
@@ -22,7 +24,7 @@ export default function Starting() {
               position: 'absolute',
               width: 320, height: 320,
               borderRadius: '50%',
-              border: '1px dashed rgba(0,212,255,0.3)',
+              border: `1px dashed rgba(${theme.secondaryRGB},0.3)`,
               animation: 'nukko-rotate-rev 14s linear infinite',
             }} />
             <NukkoMascot size={160} pose="spinning" />

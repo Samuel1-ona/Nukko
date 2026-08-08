@@ -2,13 +2,15 @@ import { useMemo } from 'react';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import Planet           from '../ui/Planet.jsx';
 import Leaderboard      from '../ui/Leaderboard.jsx';
+import BackChevron      from '../ui/BackChevron.jsx';
 import { PLANET_DATA }  from '../ui/Planet.jsx';
 import { buildScorePost, GAME_URL } from '../../utils/social.js';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
 
 function Confetti() {
   const items = useMemo(() => Array.from({ length: 28 }, (_, i) => ({
     x: 5 + Math.random() * 90,
-    color: ['#ffd700', '#7b2fff', '#00d4ff', '#ff6b8a', '#a78bff'][i % 5],
+    color: ['#ffd700', '#ff2e9e', '#00d4ff', '#ff6b8a', '#a78bff'][i % 5],
     delay: Math.random() * 0.5,
     dur: 2.8 + Math.random() * 1.5,
     size: 4 + Math.random() * 5,
@@ -78,7 +80,9 @@ export default function Result({
   leaderboard,
   leaderboardLoading,
   onPlayAgain,
+  onGoHome,
 }) {
+  const { theme } = useTheme();
   const highestStage = stageFromScore(score);
   const planet = PLANET_DATA[highestStage - 1];
 
@@ -89,8 +93,15 @@ export default function Result({
 
         <div style={{
           height: '100%', display: 'flex', flexDirection: 'column',
-          padding: '28px 18px 18px', boxSizing: 'border-box', overflowY: 'auto',
+          padding: '18px 18px 18px', boxSizing: 'border-box', overflowY: 'auto',
         }}>
+
+          {/* ── Header — back to Home ────────────────────────────────────── */}
+          {onGoHome && (
+            <div style={{ marginBottom: 12 }}>
+              <BackChevron onClick={onGoHome} />
+            </div>
+          )}
 
           {/* ── Score headline ───────────────────────────────────────────── */}
           <div style={{ textAlign: 'center', animation: 'nukko-score-pop 0.5s ease-out' }}>
@@ -225,11 +236,11 @@ export default function Result({
               onClick={onPlayAgain}
               style={{
                 flex: 1, height: 56, borderRadius: 16,
-                background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                background: theme.gradient,
                 border: 'none', color: '#fff',
                 fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 17,
                 cursor: 'pointer',
-                boxShadow: '0 10px 30px -8px rgba(123,47,255,0.6), inset 0 1px 0 rgba(255,255,255,0.25)',
+                boxShadow: `0 10px 30px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`,
               }}
             >
               Play Again

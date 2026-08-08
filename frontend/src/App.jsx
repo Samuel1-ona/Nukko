@@ -12,16 +12,22 @@ import { useBgMusic }     from './hooks/useBgMusic.js';
 import { isUserRejection } from './utils/miniPay.js';
 import { useToast }       from './components/ui/Toast.jsx';
 import { useAudio }       from './hooks/useAudio.js';
+import { useTheme }       from './theme/ThemeContext.jsx';
 import { getOrCreatePlayer, saveGameSession, addLeaderboardEntry, updatePlayerUsername } from './supabase/db.js';
 
-import WalletConnect  from './components/screens/WalletConnect.jsx';
-import SetUsername    from './components/screens/SetUsername.jsx';
-import Home           from './components/screens/Home.jsx';
-import Starting       from './components/screens/Starting.jsx';
-import Playing        from './components/screens/Playing.jsx';
-import Submitting     from './components/screens/Submitting.jsx';
-import Result         from './components/screens/Result.jsx';
-import SplashScreen   from './components/screens/SplashScreen.jsx';
+import WalletConnect   from './components/screens/WalletConnect.jsx';
+import SetUsername     from './components/screens/SetUsername.jsx';
+import Home            from './components/screens/Home.jsx';
+import Starting        from './components/screens/Starting.jsx';
+import Playing         from './components/screens/Playing.jsx';
+import Submitting      from './components/screens/Submitting.jsx';
+import Result          from './components/screens/Result.jsx';
+import SplashScreen    from './components/screens/SplashScreen.jsx';
+import ModeSelect      from './components/screens/ModeSelect.jsx';
+import Milestones      from './components/screens/Milestones.jsx';
+import Profile         from './components/screens/Profile.jsx';
+import Settings        from './components/screens/Settings.jsx';
+import FullLeaderboard from './components/screens/FullLeaderboard.jsx';
 import HowToPlay     from './components/ui/HowToPlay.jsx';
 import LowGasModal   from './components/ui/LowGasModal.jsx';
 import LegalModal    from './components/ui/LegalModal.jsx';
@@ -35,16 +41,27 @@ import {
 } from './utils/social.js';
 
 const S = {
-  WALLET_CONNECT: 'WALLET_CONNECT',
-  SET_USERNAME:   'SET_USERNAME',
-  HOME:           'HOME',
-  STARTING:       'STARTING',
-  PLAYING:        'PLAYING',
-  SUBMITTING:     'SUBMITTING',
-  RESULT:         'RESULT',
+  WALLET_CONNECT:  'WALLET_CONNECT',
+  SET_USERNAME:    'SET_USERNAME',
+  HOME:            'HOME',
+  MODE_SELECT:     'MODE_SELECT',
+  MILESTONES:      'MILESTONES',
+  PROFILE:         'PROFILE',
+  SETTINGS:        'SETTINGS',
+  LEADERBOARD_FULL:'LEADERBOARD_FULL',
+  STARTING:        'STARTING',
+  PLAYING:         'PLAYING',
+  SUBMITTING:      'SUBMITTING',
+  RESULT:          'RESULT',
 };
 
+// Preview-only milestone score thresholds — see MilestoneTrack in Playing.jsx
+// and the Milestones screen. No real reward is granted; this just tracks
+// which thresholds a run has already celebrated so the toast fires once.
+const MILESTONE_THRESHOLDS = [5000, 10000, 15000];
+
 export default function App() {
+  const { theme } = useTheme();
   const [splashDone,  setSplashDone]  = useState(false);
   const [screen,      setScreen]      = useState(S.WALLET_CONNECT);
   const [profile,     setProfile]     = useState(null);
@@ -77,9 +94,11 @@ export default function App() {
   useEffect(() => { scoreRef.current   = score;   }, [score]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
 
+  const milestonesHitRef = useRef(new Set());
+
   // ── Hooks ──────────────────────────────────────────────────────────────────
 
-  const { address, walletClient, isMiniPay, connect, connectWithSocial, socialLoading, error: walletError } = useWallet();
+  const { address, walletClient, isMiniPay, connect, connectWithSocial, socialLoading, disconnect, error: walletError } = useWallet();
 
   const powerUpsEnabled = !!address;
 
@@ -100,8 +119,17 @@ export default function App() {
   const { musicMuted, toggleMusicMute, fadeOut: fadeMusicOut, fadeIn: fadeMusicIn } = useBgMusic();
 
   const handleScorePts = useCallback((pts) => {
-    setScore((prev) => prev + pts);
-  }, []);
+    setScore((prev) => {
+      const next = prev + pts;
+      for (const m of MILESTONE_THRESHOLDS) {
+        if (next >= m && !milestonesHitRef.current.has(m)) {
+          milestonesHitRef.current.add(m);
+          showToast(`🏆 ${m.toLocaleString()} pts milestone!`, 2400);
+        }
+      }
+      return next;
+    });
+  }, [showToast]);
 
   const handleTimerExpire = useCallback(() => {
     if (screenRef.current === S.PLAYING) {
@@ -124,7 +152,7 @@ export default function App() {
     pauseEngine, resumeEngine,
     activateBomb, expandContainer, triggerTimeFX,
     getMergeCount,
-  } = useGame(handleScorePts, showToast, addTime, audio);
+  } = useGame(handleScorePts, showToast, addTime, audio, theme);
 
   // Power-ups used during the current run — reported to the session log
   const powerUpsUsedRef = useRef({ bombs: 0, expands: 0 });
@@ -233,6 +261,7 @@ export default function App() {
     // Fresh start — guests get 25 s, ranked players get full 90 s
     setScore(0);
     scoreRef.current = 0;
+    milestonesHitRef.current = new Set();
     powerUpsUsedRef.current = { bombs: 0, expands: 0 };
     gameStartTimeRef.current = Date.now();
     startEngine();
@@ -358,6 +387,7 @@ export default function App() {
     setGuestTrialExpired(false);
     setScore(0);
     scoreRef.current = 0;
+    milestonesHitRef.current = new Set();
     startEngine();
     startTimer(25);
   }, [startEngine, startTimer]);
@@ -429,6 +459,22 @@ export default function App() {
     }
   }, [buyPowerUp, shop, showToast]);
 
+  // ── Simple navigation handlers (new hub screens) ────────────────────────────
+
+  const onOpenModes      = useCallback(() => setScreen(S.MODE_SELECT), []);
+  const onOpenMilestones = useCallback(() => setScreen(S.MILESTONES), []);
+  const onOpenProfile    = useCallback(() => setScreen(S.PROFILE), []);
+  const onOpenSettings   = useCallback(() => setScreen(S.SETTINGS), []);
+  const onOpenLeaderboard = useCallback(() => setScreen(S.LEADERBOARD_FULL), []);
+  const onBackToHome     = useCallback(() => setScreen(S.HOME), []);
+
+  // Disconnecting only makes sense outside MiniPay — MiniPay auto-reconnects
+  // the injected wallet on a timer, so offering it there would just flicker.
+  const handleDisconnect = useCallback(() => {
+    disconnect();
+    setScreen(S.WALLET_CONNECT);
+  }, [disconnect]);
+
   // ── Screen routing ──────────────────────────────────────────────────────────
 
   // Low-gas modal overlays every post-connect screen.
@@ -470,13 +516,17 @@ export default function App() {
             isMiniPay={isMiniPay}
             leaderboard={leaderboard}
             leaderboardLoading={leaderboardLoading}
-            onStartGame={handleStartGame}
+            onOpenModes={onOpenModes}
             hasPausedGame={hasPausedGame}
             pausedScore={score}
             pausedRemaining={remaining}
             onContinueGame={handleContinueGame}
             onOpenLegal={setLegalModal}
             onOpenFAQ={() => setShowFAQ(true)}
+            onOpenSettings={onOpenSettings}
+            onOpenProfile={onOpenProfile}
+            onOpenMilestones={onOpenMilestones}
+            onOpenLeaderboard={onOpenLeaderboard}
           />
           {showTutorial && (
             <HowToPlay onDone={() => {
@@ -487,6 +537,54 @@ export default function App() {
           <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
           <FAQModal isOpen={showFAQ} onClose={() => setShowFAQ(false)} />
         </>
+      );
+      break;
+
+    case S.MODE_SELECT:
+      currentScreen = (
+        <ModeSelect
+          onBack={onBackToHome}
+          onSelectMerge={handleStartGame}
+        />
+      );
+      break;
+
+    case S.MILESTONES:
+      currentScreen = <Milestones onBack={onBackToHome} />;
+      break;
+
+    case S.PROFILE:
+      currentScreen = (
+        <Profile
+          profile={profile}
+          address={address}
+          onBack={onBackToHome}
+          onEditName={() => setScreen(S.SET_USERNAME)}
+        />
+      );
+      break;
+
+    case S.SETTINGS:
+      currentScreen = (
+        <Settings
+          onBack={onBackToHome}
+          muted={muted}
+          onToggleMute={toggleMute}
+          musicMuted={musicMuted}
+          onToggleMusic={toggleMusicMute}
+          onDisconnect={isMiniPay ? undefined : handleDisconnect}
+        />
+      );
+      break;
+
+    case S.LEADERBOARD_FULL:
+      currentScreen = (
+        <FullLeaderboard
+          onBack={onBackToHome}
+          entries={leaderboard}
+          loading={leaderboardLoading}
+          myUsername={profile?.username}
+        />
       );
       break;
 
@@ -561,7 +659,8 @@ export default function App() {
           rank={resultRank}
           leaderboard={leaderboard}
           leaderboardLoading={leaderboardLoading}
-          onPlayAgain={() => setScreen(S.HOME)}
+          onPlayAgain={handleStartGame}
+          onGoHome={onBackToHome}
         />
       );
       break;

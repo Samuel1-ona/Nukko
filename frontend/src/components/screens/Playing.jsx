@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { RecordIcon } from '../ui/Icons.jsx';
+import { RecordIcon, TrophyIcon } from '../ui/Icons.jsx';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import BottomBar        from '../ui/BottomBar.jsx';
 import PowerUpShop      from '../ui/PowerUpShop.jsx';
@@ -7,6 +7,67 @@ import TimeShop         from '../ui/TimeShop.jsx';
 import Toast            from '../ui/Toast.jsx';
 import PauseModal       from '../ui/PauseModal.jsx';
 import { FRUITS, drawFruitOnCtx } from '../../game/fruits.js';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
+
+// Real-time progress toward the milestone reward previews shown on the
+// Milestones screen — reward amounts are the same preview figures shown
+// there (not yet claimable anywhere); this tracker just mirrors the run's
+// real score against them live, same as the leaderboard's "live" badges.
+const MILESTONES = [
+  { score: 5000,  reward: '0.02' },
+  { score: 10000, reward: '0.05' },
+  { score: 15000, reward: '0.10' },
+];
+
+function MilestoneTrack({ score }) {
+  const { theme } = useTheme();
+  const maxTrack = MILESTONES[MILESTONES.length - 1].score;
+  const next = MILESTONES.find(m => score < m.score);
+  const pct = Math.min(100, (score / maxTrack) * 100);
+  return (
+    <div style={{ marginTop: 10, marginBottom: 2 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: 99, background: '#00e676',
+            boxShadow: '0 0 8px #00e676', animation: 'nukko-pulse 1.1s ease-in-out infinite',
+          }} />
+          <span style={{
+            fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 800,
+            color: '#00e676', letterSpacing: '0.05em',
+          }}>LIVE</span>
+        </div>
+        <span style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 700, color: '#ffd700',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          <TrophyIcon size={11} color="#ffd700" />
+          {next ? `$${next.reward} USDT at ${next.score.toLocaleString()}` : 'All milestones reached'}
+        </span>
+      </div>
+      <div style={{ position: 'relative', height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
+        <div style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, borderRadius: 99,
+          background: `linear-gradient(90deg,${theme.primary},${theme.secondary},#ffd700)`, transition: 'width .4s ease',
+        }} />
+        {MILESTONES.map(m => {
+          const left = (m.score / maxTrack) * 100;
+          const hit = score >= m.score;
+          return (
+            <div key={m.score} style={{
+              position: 'absolute', left: `${left}%`, top: '50%', transform: 'translate(-50%,-50%)',
+              width: 11, height: 11, borderRadius: 99,
+              background: hit ? '#ffd700' : '#1a0440',
+              border: `2px solid ${hit ? '#ffd700' : 'rgba(255,255,255,0.4)'}`,
+              boxShadow: hit ? '0 0 8px #ffd700' : 'none', transition: 'all .3s ease',
+            }} />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ── Guest trial expired modal ──────────────────────────────────────────────
 
@@ -23,6 +84,7 @@ function GuestSpinner() {
 }
 
 function GuestTrialExpiredModal({ score, onConnectSocial, onConnectWallet, socialLoading, onRetryGuest }) {
+  const { theme } = useTheme();
   const [walletLoading, setWalletLoading] = useState(false);
 
   const handleConnectWallet = async () => {
@@ -43,19 +105,19 @@ function GuestTrialExpiredModal({ score, onConnectSocial, onConnectWallet, socia
       <div style={{
         width: '100%', maxWidth: 340,
         background: 'linear-gradient(160deg, #1a0930 0%, #0c0420 100%)',
-        border: '1px solid rgba(123,47,255,0.3)',
+        border: `1px solid rgba(${theme.primaryRGB},0.3)`,
         borderRadius: 28, overflow: 'hidden',
-        boxShadow: '0 24px 80px rgba(0,0,0,0.75), 0 0 60px rgba(123,47,255,0.14)',
+        boxShadow: `0 24px 80px rgba(0,0,0,0.75), 0 0 60px rgba(${theme.primaryRGB},0.14)`,
         animation: 'nukko-score-pop 0.28s cubic-bezier(.22,1,.36,1)',
       }}>
         {/* Gradient top bar */}
-        <div style={{ height: 3, background: 'linear-gradient(90deg, #7b2fff, #00d4ff, #7b2fff)' }} />
+        <div style={{ height: 3, background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.primary})` }} />
 
         <div style={{ padding: '28px 24px 4px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {/* Icon */}
           <div style={{
             width: 56, height: 56, borderRadius: 18,
-            background: 'rgba(123,47,255,0.15)', border: '1px solid rgba(123,47,255,0.35)',
+            background: `rgba(${theme.primaryRGB},0.15)`, border: `1px solid rgba(${theme.primaryRGB},0.35)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: 16,
           }}>
@@ -97,7 +159,7 @@ function GuestTrialExpiredModal({ score, onConnectSocial, onConnectWallet, socia
           {/* Unlock callout */}
           <div style={{
             width: '100%', padding: '14px 16px', borderRadius: 16,
-            background: 'rgba(123,47,255,0.08)', border: '1px solid rgba(123,47,255,0.2)',
+            background: `rgba(${theme.primaryRGB},0.08)`, border: `1px solid rgba(${theme.primaryRGB},0.2)`,
             marginBottom: 24,
           }}>
             <div style={{
@@ -131,13 +193,13 @@ function GuestTrialExpiredModal({ score, onConnectSocial, onConnectWallet, socia
             style={{
               width: '100%', height: 54, borderRadius: 16,
               background: (socialLoading || walletLoading)
-                ? 'rgba(123,47,255,0.35)'
-                : 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                ? `rgba(${theme.primaryRGB},0.35)`
+                : theme.gradient,
               border: 'none', color: '#fff',
               fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 16,
               cursor: (socialLoading || walletLoading) ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: '0 8px 28px rgba(123,47,255,0.4)',
+              boxShadow: `0 8px 28px rgba(${theme.primaryRGB},0.4)`,
             }}
           >
             {socialLoading ? <GuestSpinner /> : null}
@@ -259,6 +321,7 @@ export default function Playing({
   socialLoading,
   onRetryGuest,
 }) {
+  const { theme } = useTheme();
   const [timeShopOpen,           setTimeShopOpen]           = useState(false);
   const [paused,                 setPaused]                 = useState(false);
   const [sessionFailDismissed,   setSessionFailDismissed]   = useState(false);
@@ -486,6 +549,8 @@ export default function Playing({
               </div>
             </div>
 
+            <MilestoneTrack score={score} />
+
             {/* Session badge — compact, below HUD row */}
             {sessionInfo && (
               <div style={{
@@ -534,7 +599,7 @@ export default function Playing({
             /* Guest trial: no power-ups, show a connect nudge instead */
             <div style={{
               flexShrink: 0,
-              borderTop: '1px solid rgba(123,47,255,0.2)',
+              borderTop: `1px solid rgba(${theme.primaryRGB},0.2)`,
               background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(8,1,15,0.92) 100%)',
               padding: '12px 16px 22px',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -549,7 +614,7 @@ export default function Playing({
           ) : powerUpsEnabled ? (
             <div style={{
               flexShrink: 0,
-              borderTop: '1px solid rgba(0,212,255,0.18)',
+              borderTop: `1px solid rgba(${theme.secondaryRGB},0.18)`,
               background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(8,1,15,0.92) 100%)',
               padding: '10px 12px 22px',
             }}>
@@ -676,11 +741,11 @@ export default function Playing({
               {/* Go home — primary */}
               <button onClick={onGoHome} style={{
                 width: '100%', height: 52, borderRadius: 14,
-                background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                background: theme.gradient,
                 border: 'none', color: '#fff',
                 fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 15,
                 cursor: 'pointer',
-                boxShadow: '0 4px 20px rgba(123,47,255,0.35)',
+                boxShadow: `0 4px 20px rgba(${theme.primaryRGB},0.35)`,
               }}>
                 Back to Home
               </button>
