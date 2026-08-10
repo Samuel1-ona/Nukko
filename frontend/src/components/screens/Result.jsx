@@ -81,10 +81,18 @@ export default function Result({
   leaderboardLoading,
   onPlayAgain,
   onGoHome,
+  runSummary,
+  progress,
 }) {
   const { theme } = useTheme();
   const highestStage = stageFromScore(score);
   const planet = PLANET_DATA[highestStage - 1];
+  const codexFound = progress?.discovered?.length ?? 0;
+  const codexTotal = PLANET_DATA.length;
+  // Near-miss framing — the single strongest retry trigger available. Only
+  // shown when the gap is small enough to read as "I nearly had it".
+  const gapToBest = personalBest > 0 ? personalBest - score : 0;
+  const nearMiss  = !isNewRecord && gapToBest > 0 && gapToBest <= Math.max(600, personalBest * 0.12);
 
   return (
     <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
@@ -136,6 +144,15 @@ export default function Result({
               </div>
             )}
 
+            {nearMiss && (
+              <div style={{
+                marginTop: 10, fontFamily: '"Nunito", system-ui', fontSize: 13.5,
+                fontWeight: 700, color: theme.secondary,
+              }}>
+                You were {gapToBest.toLocaleString()} from your best
+              </div>
+            )}
+
             {rank && (
               <div style={{
                 marginTop: 10, fontFamily: '"Nunito", system-ui', fontSize: 13,
@@ -147,6 +164,55 @@ export default function Result({
               </div>
             )}
           </div>
+
+          {/* ── Run progression: XP, discoveries, challenges ─────────────── */}
+          {runSummary && (
+            <div style={{
+              marginTop: 16, borderRadius: 16, padding: '12px 14px',
+              background: `rgba(${theme.primaryRGB},0.08)`,
+              border: `1px solid rgba(${theme.primaryRGB},0.22)`,
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{
+                  fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 800,
+                  letterSpacing: '0.14em', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.5)',
+                }}>Run rewards</span>
+                <span style={{
+                  fontFamily: '"Space Mono", monospace', fontSize: 13, fontWeight: 700,
+                  color: theme.secondary,
+                }}>+{runSummary.gainedXp} XP</span>
+              </div>
+
+              {runSummary.leveledUp && (
+                <div style={{
+                  fontFamily: '"Nunito", system-ui', fontSize: 12.5, fontWeight: 800, color: '#ffd700',
+                }}>
+                  ★ Rank up — you are now Rank {runSummary.newLevel}
+                </div>
+              )}
+
+              {runSummary.discoveredStages?.map(stage => (
+                <div key={stage} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  fontFamily: '"Nunito", system-ui', fontSize: 12.5, color: '#fff',
+                }}>
+                  <Planet stage={stage} size={20} />
+                  <span><strong>New discovery</strong> — {PLANET_DATA[stage - 1]?.name}</span>
+                </div>
+              ))}
+
+              {runSummary.challengesCompleted?.length > 0 && (
+                <div style={{
+                  fontFamily: '"Nunito", system-ui', fontSize: 12.5, color: '#00e676', fontWeight: 700,
+                }}>
+                  ✓ {runSummary.challengesCompleted.length} daily challenge
+                  {runSummary.challengesCompleted.length > 1 ? 's' : ''} complete
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Planet reached card ─────────────────────────────────────── */}
           <div style={{
@@ -173,7 +239,7 @@ export default function Result({
                 marginTop: 2, fontFamily: '"Nunito", system-ui', fontSize: 11,
                 color: 'rgba(255,255,255,0.4)',
               }}>
-                Stage {highestStage} of 14
+                Stage {highestStage} of {codexTotal} · {codexFound}/{codexTotal} catalogued
               </div>
             </div>
             {personalBest > 0 && (

@@ -12,6 +12,7 @@ import { useBgMusic }     from './hooks/useBgMusic.js';
 import { isUserRejection } from './utils/miniPay.js';
 import { useToast }       from './components/ui/Toast.jsx';
 import { useAudio }       from './hooks/useAudio.js';
+import { useProgress }    from './hooks/useProgress.js';
 import { useTheme }       from './theme/ThemeContext.jsx';
 import { getOrCreatePlayer, saveGameSession, addLeaderboardEntry, updatePlayerUsername } from './supabase/db.js';
 
@@ -24,7 +25,7 @@ import Submitting      from './components/screens/Submitting.jsx';
 import Result          from './components/screens/Result.jsx';
 import SplashScreen    from './components/screens/SplashScreen.jsx';
 import ModeSelect      from './components/screens/ModeSelect.jsx';
-import Milestones      from './components/screens/Milestones.jsx';
+import Codex           from './components/screens/Codex.jsx';
 import Profile         from './components/screens/Profile.jsx';
 import Settings        from './components/screens/Settings.jsx';
 import FullLeaderboard from './components/screens/FullLeaderboard.jsx';
@@ -45,7 +46,7 @@ const S = {
   SET_USERNAME:    'SET_USERNAME',
   HOME:            'HOME',
   MODE_SELECT:     'MODE_SELECT',
-  MILESTONES:      'MILESTONES',
+  CODEX:           'CODEX',
   PROFILE:         'PROFILE',
   SETTINGS:        'SETTINGS',
   LEADERBOARD_FULL:'LEADERBOARD_FULL',
@@ -54,11 +55,6 @@ const S = {
   SUBMITTING:      'SUBMITTING',
   RESULT:          'RESULT',
 };
-
-// Preview-only milestone score thresholds — see MilestoneTrack in Playing.jsx
-// and the Milestones screen. No real reward is granted; this just tracks
-// which thresholds a run has already celebrated so the toast fires once.
-const MILESTONE_THRESHOLDS = [5000, 10000, 15000];
 
 export default function App() {
   const { theme } = useTheme();
@@ -69,6 +65,7 @@ export default function App() {
   const [finalScore,  setFinalScore]  = useState(0);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [resultRank,  setResultRank]  = useState(null);
+  const [runSummary,  setRunSummary]  = useState(null); // XP / discoveries / challenges
   const [shop,          setShop]          = useState(null); // 'bomb' | 'expand' | null
   const [sessionStatus, setSessionStatus] = useState('idle'); // 'idle'|'pending'|'confirmed'|'failed'
   const [showTutorial,  setShowTutorial]  = useState(false);
@@ -94,8 +91,6 @@ export default function App() {
   useEffect(() => { scoreRef.current   = score;   }, [score]);
   useEffect(() => { profileRef.current = profile; }, [profile]);
 
-  const milestonesHitRef = useRef(new Set());
-
   // ── Hooks ──────────────────────────────────────────────────────────────────
 
   const { address, walletClient, isMiniPay, connect, connectWithSocial, socialLoading, disconnect, error: walletError } = useWallet();
@@ -119,17 +114,8 @@ export default function App() {
   const { musicMuted, toggleMusicMute, fadeOut: fadeMusicOut, fadeIn: fadeMusicIn } = useBgMusic();
 
   const handleScorePts = useCallback((pts) => {
-    setScore((prev) => {
-      const next = prev + pts;
-      for (const m of MILESTONE_THRESHOLDS) {
-        if (next >= m && !milestonesHitRef.current.has(m)) {
-          milestonesHitRef.current.add(m);
-          showToast(`🏆 ${m.toLocaleString()} pts milestone!`, 2400);
-        }
-      }
-      return next;
-    });
-  }, [showToast]);
+    setScore((prev) => prev + pts);
+  }, []);
 
   const handleTimerExpire = useCallback(() => {
     if (screenRef.current === S.PLAYING) {
@@ -143,16 +129,33 @@ export default function App() {
     }
   }, []);
 
+  // Local progression — codex, rank, challenges, streak. localStorage only.
+  const {
+    progress, challenges, challengesDone, streakBroken,
+    discovery, clearDiscovery, recordMerge, beginRun, finishRun,
+  } = useProgress(address);
+
   // useTimer must come before useGame so addTime is defined when passed in
-  const { remaining, startTimer, addTime, stopTimer, pauseTimer, resumeTimer } = useTimer(handleTimerExpire);
+  const { remaining, startTimer, addTime, halveTime, stopTimer, pauseTimer, resumeTimer } = useTimer(handleTimerExpire);
+
+  // A gravity-well collapse costs time instead of ending the run: it halves
+  // whatever is left. Proportional, so it needs no guest-trial special case —
+  // a 25s trial and a 90s run both lose exactly half. Returns the seconds taken
+  // so the canvas FX and the clock pulse can name the number.
+  const handleCollapse = useCallback(() => {
+    const lost = halveTime();
+    showToast(`⚠ Collapse — time halved, −${lost}s`, 2400);
+    return lost;
+  }, [halveTime, showToast]);
 
   const {
-    canvasRef, nextIdx, nextNextIdx, gameOver, containerWidth,
-    startEngine, dropFruit, movePointer, stopEngine,
+    canvasRef, nextIdx, nextNextIdx, holdIdx, canHold, chain, timeDelta,
+    gameOver, containerWidth,
+    startEngine, dropFruit, swapHold, movePointer, stopEngine,
     pauseEngine, resumeEngine,
     activateBomb, expandContainer, triggerTimeFX,
-    getMergeCount,
-  } = useGame(handleScorePts, showToast, addTime, audio, theme);
+    getMergeCount, getRunStats,
+  } = useGame(handleScorePts, showToast, addTime, audio, theme, recordMerge, handleCollapse);
 
   // Power-ups used during the current run — reported to the session log
   const powerUpsUsedRef = useRef({ bombs: 0, expands: 0 });
@@ -261,12 +264,12 @@ export default function App() {
     // Fresh start — guests get 25 s, ranked players get full 90 s
     setScore(0);
     scoreRef.current = 0;
-    milestonesHitRef.current = new Set();
     powerUpsUsedRef.current = { bombs: 0, expands: 0 };
     gameStartTimeRef.current = Date.now();
+    beginRun();
     startEngine();
     startTimer(isGuestRef.current ? 25 : undefined);
-  }, [screen, startEngine, startTimer]);
+  }, [screen, startEngine, startTimer, beginRun]);
 
   // ── Submit score when SUBMITTING screen appears ─────────────────────────────
 
@@ -281,6 +284,10 @@ export default function App() {
     const durationSeconds = gameStartTimeRef.current
       ? Math.round((Date.now() - gameStartTimeRef.current) / 1000)
       : null;
+
+    // Settle local progression immediately — it's localStorage-only, so it must
+    // not wait on (or be lost to) a failed chain submit.
+    setRunSummary(finishRun({ score: submitted, ...getRunStats() }));
 
     (async () => {
       // Save session + leaderboard entry to Supabase first (non-blocking) so
@@ -387,10 +394,10 @@ export default function App() {
     setGuestTrialExpired(false);
     setScore(0);
     scoreRef.current = 0;
-    milestonesHitRef.current = new Set();
+    beginRun();
     startEngine();
     startTimer(25);
-  }, [startEngine, startTimer]);
+  }, [startEngine, startTimer, beginRun]);
 
   const handleStartGame = useCallback(async () => {
     // Discard any paused game and start fresh
@@ -462,7 +469,7 @@ export default function App() {
   // ── Simple navigation handlers (new hub screens) ────────────────────────────
 
   const onOpenModes      = useCallback(() => setScreen(S.MODE_SELECT), []);
-  const onOpenMilestones = useCallback(() => setScreen(S.MILESTONES), []);
+  const onOpenCodex      = useCallback(() => setScreen(S.CODEX), []);
   const onOpenProfile    = useCallback(() => setScreen(S.PROFILE), []);
   const onOpenSettings   = useCallback(() => setScreen(S.SETTINGS), []);
   const onOpenLeaderboard = useCallback(() => setScreen(S.LEADERBOARD_FULL), []);
@@ -525,8 +532,12 @@ export default function App() {
             onOpenFAQ={() => setShowFAQ(true)}
             onOpenSettings={onOpenSettings}
             onOpenProfile={onOpenProfile}
-            onOpenMilestones={onOpenMilestones}
+            onOpenCodex={onOpenCodex}
             onOpenLeaderboard={onOpenLeaderboard}
+            progress={progress}
+            challenges={challenges}
+            challengesDone={challengesDone}
+            streakBroken={streakBroken}
           />
           {showTutorial && (
             <HowToPlay onDone={() => {
@@ -549,8 +560,8 @@ export default function App() {
       );
       break;
 
-    case S.MILESTONES:
-      currentScreen = <Milestones onBack={onBackToHome} />;
+    case S.CODEX:
+      currentScreen = <Codex onBack={onBackToHome} progress={progress} />;
       break;
 
     case S.PROFILE:
@@ -598,6 +609,13 @@ export default function App() {
           canvasRef={canvasRef}
           nextIdx={nextIdx}
           nextNextIdx={nextNextIdx}
+          holdIdx={holdIdx}
+          canHold={canHold}
+          onSwapHold={swapHold}
+          chain={chain}
+          timeDelta={timeDelta}
+          discovery={discovery}
+          onDiscoveryDone={clearDiscovery}
           sessionStatus={sessionStatus}
           score={score}
           personalBest={profile?.personalBest ?? 0}
@@ -661,6 +679,8 @@ export default function App() {
           leaderboardLoading={leaderboardLoading}
           onPlayAgain={handleStartGame}
           onGoHome={onBackToHome}
+          runSummary={runSummary}
+          progress={progress}
         />
       );
       break;

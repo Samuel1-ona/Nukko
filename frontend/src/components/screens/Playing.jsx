@@ -1,70 +1,97 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { RecordIcon, TrophyIcon } from '../ui/Icons.jsx';
+import { RecordIcon } from '../ui/Icons.jsx';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import BottomBar        from '../ui/BottomBar.jsx';
 import PowerUpShop      from '../ui/PowerUpShop.jsx';
 import TimeShop         from '../ui/TimeShop.jsx';
 import Toast            from '../ui/Toast.jsx';
 import PauseModal       from '../ui/PauseModal.jsx';
+import DiscoveryOverlay from '../ui/DiscoveryOverlay.jsx';
 import { FRUITS, drawFruitOnCtx } from '../../game/fruits.js';
 import { useTheme }     from '../../theme/ThemeContext.jsx';
 
-// Real-time progress toward the milestone reward previews shown on the
-// Milestones screen — reward amounts are the same preview figures shown
-// there (not yet claimable anywhere); this tracker just mirrors the run's
-// real score against them live, same as the leaderboard's "live" badges.
-const MILESTONES = [
-  { score: 5000,  reward: '0.02' },
-  { score: 10000, reward: '0.05' },
-  { score: 15000, reward: '0.10' },
+// Chain tiers — colour escalates with depth so a big cascade is legible at a
+// glance without reading the number.
+const CHAIN_TIERS = [
+  { at: 2, color: '#ffffff' },
+  { at: 3, color: '#00d4ff' },
+  { at: 4, color: '#ffd700' },
+  { at: 5, color: '#ff8a4a' },
+  { at: 6, color: '#ff3ba0' },
 ];
 
-function MilestoneTrack({ score }) {
-  const { theme } = useTheme();
-  const maxTrack = MILESTONES[MILESTONES.length - 1].score;
-  const next = MILESTONES.find(m => score < m.score);
-  const pct = Math.min(100, (score / maxTrack) * 100);
+function chainColor(count) {
+  let c = CHAIN_TIERS[0].color;
+  for (const t of CHAIN_TIERS) if (count >= t.at) c = t.color;
+  return c;
+}
+
+/**
+ * Live chain meter. Chains used to be an invisible 450ms accident — you cannot
+ * build mastery around a window you can't see, so this draws the remaining time
+ * as a draining bar and names the multiplier you're currently riding.
+ */
+function ChainMeter({ chain }) {
+  const [pct, setPct] = useState(0);
+  const active = chain.count >= 2 && pct > 0;
+
+  useEffect(() => {
+    if (chain.count < 2) { setPct(0); return; }
+    let raf;
+    const startedAt = Date.now();
+    const total = Math.max(1, chain.expiresAt - startedAt);
+    const tick = () => {
+      const left = chain.expiresAt - Date.now();
+      const p = Math.max(0, Math.min(1, left / total));
+      setPct(p);
+      if (p > 0) raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [chain.key, chain.count, chain.expiresAt]);
+
+  const color = chainColor(chain.count);
+  const multiplier = (1 + (chain.count - 1) * 0.4).toFixed(1);
+
   return (
-    <div style={{ marginTop: 10, marginBottom: 2 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+    <div style={{ marginTop: 10, marginBottom: 2, height: 26 }}>
+      {active ? (
+        <>
           <div style={{
-            width: 6, height: 6, borderRadius: 99, background: '#00e676',
-            boxShadow: '0 0 8px #00e676', animation: 'nukko-pulse 1.1s ease-in-out infinite',
-          }} />
-          <span style={{
-            fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 800,
-            color: '#00e676', letterSpacing: '0.05em',
-          }}>LIVE</span>
-        </div>
-        <span style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 700, color: '#ffd700',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          <TrophyIcon size={11} color="#ffd700" />
-          {next ? `$${next.reward} USDT at ${next.score.toLocaleString()}` : 'All milestones reached'}
-        </span>
-      </div>
-      <div style={{ position: 'relative', height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
-        <div style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, borderRadius: 99,
-          background: `linear-gradient(90deg,${theme.primary},${theme.secondary},#ffd700)`, transition: 'width .4s ease',
-        }} />
-        {MILESTONES.map(m => {
-          const left = (m.score / maxTrack) * 100;
-          const hit = score >= m.score;
-          return (
-            <div key={m.score} style={{
-              position: 'absolute', left: `${left}%`, top: '50%', transform: 'translate(-50%,-50%)',
-              width: 11, height: 11, borderRadius: 99,
-              background: hit ? '#ffd700' : '#1a0440',
-              border: `2px solid ${hit ? '#ffd700' : 'rgba(255,255,255,0.4)'}`,
-              boxShadow: hit ? '0 0 8px #ffd700' : 'none', transition: 'all .3s ease',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: 5, gap: 8,
+          }}>
+            <span key={chain.key} style={{
+              fontFamily: '"Nunito", system-ui', fontSize: 12, fontWeight: 900,
+              letterSpacing: '0.1em', color,
+              textShadow: `0 0 12px ${color}`,
+              animation: 'nukko-pop .25s ease-out',
+            }}>
+              CHAIN ×{multiplier}
+            </span>
+            <span style={{
+              fontFamily: '"Space Mono", monospace', fontSize: 11, fontWeight: 700,
+              color: 'rgba(255,255,255,0.55)',
+            }}>{chain.count} linked</span>
+          </div>
+          <div style={{ position: 'relative', height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
+            <div style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0,
+              width: `${pct * 100}%`, borderRadius: 99,
+              background: color, boxShadow: `0 0 10px ${color}`,
             }} />
-          );
-        })}
-      </div>
+          </div>
+        </>
+      ) : (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%',
+          fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 700,
+          letterSpacing: '0.14em', textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.18)',
+        }}>
+          merge again quickly to chain
+        </div>
+      )}
     </div>
   );
 }
@@ -276,6 +303,13 @@ export default function Playing({
   canvasRef,
   nextIdx,
   nextNextIdx,
+  holdIdx,
+  canHold,
+  onSwapHold,
+  chain,
+  timeDelta,
+  discovery,
+  onDiscoveryDone,
   sessionStatus,
   score,
   personalBest,
@@ -355,17 +389,23 @@ export default function Playing({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally mount-only
 
-  // Draw "Next" preview
+  // Draw the queue previews + hold slot. Two-deep lookahead plus a bank is what
+  // turns a reactive drop into a plan.
   useEffect(() => {
-    const canvas = document.getElementById('next-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, 64, 64);
-    ctx.fillStyle = '#050009';
-    ctx.fillRect(0, 0, 64, 64);
-    const r = Math.min(FRUITS[nextIdx].r, 22);
-    drawFruitOnCtx(ctx, 32, 32, r, nextIdx, 1);
-  }, [nextIdx]);
+    const paint = (id, idx, size, maxR, alpha = 1) => {
+      const canvas = document.getElementById(id);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, size, size);
+      ctx.fillStyle = '#050009';
+      ctx.fillRect(0, 0, size, size);
+      if (idx === null || idx === undefined) return;
+      drawFruitOnCtx(ctx, size / 2, size / 2, Math.min(FRUITS[idx].r, maxR), idx, alpha);
+    };
+    paint('next-canvas',  nextIdx,     52, 18);
+    paint('next2-canvas', nextNextIdx, 30, 10, 0.75);
+    paint('hold-canvas',  holdIdx,     30, 10, canHold ? 1 : 0.4);
+  }, [nextIdx, nextNextIdx, holdIdx, canHold]);
 
   const getX = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -420,13 +460,27 @@ export default function Playing({
       } else if (e.key === ' ') {
         e.preventDefault();
         dropFruit();
+      } else if (e.key === 'ArrowUp' || e.key === 'Shift') {
+        e.preventDefault();
+        onSwapHold?.();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [gameOver, movePointer, dropFruit, containerWidth]);
+  }, [gameOver, movePointer, dropFruit, onSwapHold, containerWidth]);
 
   const urgent = remaining <= 10;
+  // timeDelta persists in engine state until the next one, so gate the visuals
+  // on a short-lived flag — otherwise a single collapse would leave the timer
+  // pill tinted red for the rest of the run.
+  const [deltaLive, setDeltaLive] = useState(false);
+  useEffect(() => {
+    if (!timeDelta) { setDeltaLive(false); return; }
+    setDeltaLive(true);
+    const t = setTimeout(() => setDeltaLive(false), 1300);
+    return () => clearTimeout(t);
+  }, [timeDelta?.key]);
+  const penalty = deltaLive && !!timeDelta && timeDelta.amount < 0;
   const sessionInfo = SESSION_LABEL[sessionStatus] ?? null;
 
   return (
@@ -467,54 +521,126 @@ export default function Playing({
               display: 'grid',
               gridTemplateColumns: '1fr auto 1fr',
               alignItems: 'center',
-              gap: 8,
-              paddingRight: 40,  /* leave room for pause button */
+              gap: 6,
+              paddingRight: 38,  /* leave room for pause button */
             }}>
 
-              {/* Left: Timer pill */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 7,
-                padding: '7px 13px', borderRadius: 99,
-                background: urgent ? 'rgba(255,59,59,0.18)' : 'rgba(255,255,255,0.07)',
-                border: `1px solid ${urgent ? 'rgba(255,59,59,0.5)' : 'rgba(255,255,255,0.11)'}`,
-                animation: urgent ? 'nukko-pulse-bg 0.8s ease-in-out infinite' : 'none',
-                width: 'fit-content',
-              }}>
-                <div style={{
-                  width: 7, height: 7, borderRadius: '50%',
-                  background: urgent ? '#ff3b3b' : '#00d4ff',
-                  flexShrink: 0,
-                  boxShadow: urgent ? '0 0 6px #ff3b3b' : '0 0 6px #00d4ff',
-                }} />
-                <div style={{
-                  fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 20,
-                  color: urgent ? '#ff3b3b' : '#fff', letterSpacing: '-0.02em',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {fmt(remaining)}
+              {/* Left: Timer pill + signed time-change pulse.
+                  A collapse steals half the clock, so the pill itself has to
+                  react — a floating number alone is too easy to miss. */}
+              <div style={{ position: 'relative', width: 'fit-content' }}>
+                <div
+                  key={penalty ? `hit-${timeDelta.key}` : 'idle'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 11px', borderRadius: 99,
+                    background: penalty
+                      ? 'rgba(255,59,59,0.35)'
+                      : urgent ? 'rgba(255,59,59,0.18)' : 'rgba(255,255,255,0.07)',
+                    border: `1px solid ${(penalty || urgent) ? 'rgba(255,59,59,0.7)' : 'rgba(255,255,255,0.11)'}`,
+                    animation: penalty
+                      ? 'nukko-time-hit 0.7s ease-out'
+                      : urgent ? 'nukko-pulse-bg 0.8s ease-in-out infinite' : 'none',
+                  }}
+                >
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: (penalty || urgent) ? '#ff3b3b' : '#00d4ff',
+                    flexShrink: 0,
+                    boxShadow: (penalty || urgent) ? '0 0 6px #ff3b3b' : '0 0 6px #00d4ff',
+                  }} />
+                  <div style={{
+                    fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 18,
+                    color: (penalty || urgent) ? '#ff3b3b' : '#fff', letterSpacing: '-0.02em',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {fmt(remaining)}
+                  </div>
                 </div>
+
+                {/* Signed pulse: green when a big merge buys time, red when a
+                    collapse takes it. Same slot so the clock is the one place
+                    the player learns to watch. */}
+                {timeDelta && deltaLive && (
+                  <div key={timeDelta.key} style={{
+                    position: 'absolute', left: '50%', top: penalty ? -10 : -6,
+                    transform: 'translateX(-50%)',
+                    fontFamily: '"Space Mono", monospace', fontWeight: 700,
+                    fontSize: penalty ? 19 : 15,
+                    color: penalty ? '#ff3b3b' : '#00e676',
+                    textShadow: penalty
+                      ? '0 0 16px rgba(255,59,59,1)'
+                      : '0 0 12px rgba(0,230,118,0.9)',
+                    animation: 'nukko-rise 1.2s ease-out forwards',
+                    pointerEvents: 'none', whiteSpace: 'nowrap',
+                  }}>
+                    {penalty ? `−${Math.abs(timeDelta.amount)}s` : `+${timeDelta.amount}s`}
+                  </div>
+                )}
               </div>
 
-              {/* Center: NEXT preview */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                <div style={{
-                  fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 9,
-                  color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.22em',
-                }}>
-                  Next
+              {/* Center: HOLD · NEXT · AFTER */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5 }}>
+                {/* Hold slot */}
+                <button
+                  onClick={onSwapHold}
+                  disabled={!canHold || gameOver}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: (canHold && !gameOver) ? 'pointer' : 'not-allowed',
+                    opacity: (canHold && !gameOver) ? 1 : 0.45,
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <div style={{
+                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 8,
+                    color: canHold ? theme.secondary : 'rgba(255,255,255,0.3)',
+                    textTransform: 'uppercase', letterSpacing: '0.16em',
+                  }}>Hold</div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: `1px dashed ${canHold ? `rgba(${theme.secondaryRGB},0.5)` : 'rgba(255,255,255,0.12)'}`,
+                    borderRadius: 9, padding: 3,
+                  }}>
+                    <canvas id="hold-canvas" width={30} height={30}
+                      style={{ display: 'block', borderRadius: 6 }} />
+                  </div>
+                </button>
+
+                {/* Next */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{
+                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 9,
+                    color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.22em',
+                  }}>
+                    Next
+                  </div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 12, padding: 4,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                  }}>
+                    <canvas id="next-canvas" width={52} height={52}
+                      style={{ display: 'block', borderRadius: 8 }} />
+                  </div>
                 </div>
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 14, padding: 5,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                }}>
-                  <canvas
-                    id="next-canvas"
-                    width={64}
-                    height={64}
-                    style={{ display: 'block', borderRadius: 9 }}
-                  />
+
+                {/* Second lookahead */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{
+                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 8,
+                    color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.16em',
+                  }}>After</div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.035)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: 9, padding: 3,
+                  }}>
+                    <canvas id="next2-canvas" width={30} height={30}
+                      style={{ display: 'block', borderRadius: 6 }} />
+                  </div>
                 </div>
               </div>
 
@@ -527,7 +653,7 @@ export default function Playing({
                   Score
                 </div>
                 <div style={{
-                  fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 26,
+                  fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 22,
                   color: '#ffd700', letterSpacing: '-0.02em', lineHeight: 1,
                   fontVariantNumeric: 'tabular-nums',
                 }}>
@@ -549,7 +675,7 @@ export default function Playing({
               </div>
             </div>
 
-            <MilestoneTrack score={score} />
+            <ChainMeter chain={chain ?? { count: 0, expiresAt: 0, key: 0 }} />
 
             {/* Session badge — compact, below HUD row */}
             {sessionInfo && (
@@ -592,6 +718,7 @@ export default function Playing({
               style={{ display: 'block', cursor: 'none', touchAction: 'none', maxHeight: '100%', width: 'auto' }}
             />
             <Toast message={toast.message} visible={toast.visible} />
+            <DiscoveryOverlay discovery={discovery} onDone={onDiscoveryDone} />
           </div>
 
           {/* ── Bottom action bar ─────────────────────────────────────────── */}

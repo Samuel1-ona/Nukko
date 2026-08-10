@@ -89,7 +89,7 @@ export function RankingIcon({ size = 19, color = '#00d4ff' }) {
   );
 }
 
-/** Trophy — used for the Milestones menu tile */
+/** Trophy — used for the Codex menu tile */
 export function TrophyIcon({ size = 19, color = '#ffd700' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
@@ -110,7 +110,7 @@ export function ProfileIcon({ size = 19, color = '#ff2e9e' }) {
   );
 }
 
-/** Padlock — used for locked/"coming soon" tiles (Mode Select, Milestones) */
+/** Padlock — used for locked/"coming soon" tiles (Mode Select) */
 export function LockIcon({ size = 10, color = 'rgba(255,255,255,0.7)' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
