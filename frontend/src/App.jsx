@@ -12,16 +12,23 @@ import { useBgMusic }     from './hooks/useBgMusic.js';
 import { isUserRejection } from './utils/miniPay.js';
 import { useToast }       from './components/ui/Toast.jsx';
 import { useAudio }       from './hooks/useAudio.js';
+import { useProgress }    from './hooks/useProgress.js';
+import { useTheme }       from './theme/ThemeContext.jsx';
 import { getOrCreatePlayer, saveGameSession, addLeaderboardEntry, updatePlayerUsername } from './supabase/db.js';
 
-import WalletConnect  from './components/screens/WalletConnect.jsx';
-import SetUsername    from './components/screens/SetUsername.jsx';
-import Home           from './components/screens/Home.jsx';
-import Starting       from './components/screens/Starting.jsx';
-import Playing        from './components/screens/Playing.jsx';
-import Submitting     from './components/screens/Submitting.jsx';
-import Result         from './components/screens/Result.jsx';
-import SplashScreen   from './components/screens/SplashScreen.jsx';
+import WalletConnect   from './components/screens/WalletConnect.jsx';
+import SetUsername     from './components/screens/SetUsername.jsx';
+import Home            from './components/screens/Home.jsx';
+import Starting        from './components/screens/Starting.jsx';
+import Playing         from './components/screens/Playing.jsx';
+import Submitting      from './components/screens/Submitting.jsx';
+import Result          from './components/screens/Result.jsx';
+import SplashScreen    from './components/screens/SplashScreen.jsx';
+import ModeSelect      from './components/screens/ModeSelect.jsx';
+import Codex           from './components/screens/Codex.jsx';
+import Profile         from './components/screens/Profile.jsx';
+import Settings        from './components/screens/Settings.jsx';
+import FullLeaderboard from './components/screens/FullLeaderboard.jsx';
 import HowToPlay     from './components/ui/HowToPlay.jsx';
 import LowGasModal   from './components/ui/LowGasModal.jsx';
 import LegalModal    from './components/ui/LegalModal.jsx';
@@ -35,16 +42,22 @@ import {
 } from './utils/social.js';
 
 const S = {
-  WALLET_CONNECT: 'WALLET_CONNECT',
-  SET_USERNAME:   'SET_USERNAME',
-  HOME:           'HOME',
-  STARTING:       'STARTING',
-  PLAYING:        'PLAYING',
-  SUBMITTING:     'SUBMITTING',
-  RESULT:         'RESULT',
+  WALLET_CONNECT:  'WALLET_CONNECT',
+  SET_USERNAME:    'SET_USERNAME',
+  HOME:            'HOME',
+  MODE_SELECT:     'MODE_SELECT',
+  CODEX:           'CODEX',
+  PROFILE:         'PROFILE',
+  SETTINGS:        'SETTINGS',
+  LEADERBOARD_FULL:'LEADERBOARD_FULL',
+  STARTING:        'STARTING',
+  PLAYING:         'PLAYING',
+  SUBMITTING:      'SUBMITTING',
+  RESULT:          'RESULT',
 };
 
 export default function App() {
+  const { theme } = useTheme();
   const [splashDone,  setSplashDone]  = useState(false);
   const [screen,      setScreen]      = useState(S.WALLET_CONNECT);
   const [profile,     setProfile]     = useState(null);
@@ -52,6 +65,7 @@ export default function App() {
   const [finalScore,  setFinalScore]  = useState(0);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [resultRank,  setResultRank]  = useState(null);
+  const [runSummary,  setRunSummary]  = useState(null); // XP / discoveries / challenges
   const [shop,          setShop]          = useState(null); // 'bomb' | 'expand' | null
   const [sessionStatus, setSessionStatus] = useState('idle'); // 'idle'|'pending'|'confirmed'|'failed'
   const [showTutorial,  setShowTutorial]  = useState(false);
@@ -79,7 +93,7 @@ export default function App() {
 
   // ── Hooks ──────────────────────────────────────────────────────────────────
 
-  const { address, walletClient, isMiniPay, connect, connectWithSocial, socialLoading, error: walletError } = useWallet();
+  const { address, walletClient, isMiniPay, connect, connectWithSocial, socialLoading, disconnect, error: walletError } = useWallet();
 
   const powerUpsEnabled = !!address;
 
@@ -115,16 +129,33 @@ export default function App() {
     }
   }, []);
 
+  // Local progression — codex, rank, challenges, streak. localStorage only.
+  const {
+    progress, challenges, challengesDone, streakBroken,
+    discovery, clearDiscovery, recordMerge, beginRun, finishRun,
+  } = useProgress(address);
+
   // useTimer must come before useGame so addTime is defined when passed in
-  const { remaining, startTimer, addTime, stopTimer, pauseTimer, resumeTimer } = useTimer(handleTimerExpire);
+  const { remaining, startTimer, addTime, halveTime, stopTimer, pauseTimer, resumeTimer } = useTimer(handleTimerExpire);
+
+  // A gravity-well collapse costs time instead of ending the run: it halves
+  // whatever is left. Proportional, so it needs no guest-trial special case —
+  // a 25s trial and a 90s run both lose exactly half. Returns the seconds taken
+  // so the canvas FX and the clock pulse can name the number.
+  const handleCollapse = useCallback(() => {
+    const lost = halveTime();
+    showToast(`⚠ Collapse — time halved, −${lost}s`, 2400);
+    return lost;
+  }, [halveTime, showToast]);
 
   const {
-    canvasRef, nextIdx, nextNextIdx, gameOver, containerWidth,
-    startEngine, dropFruit, movePointer, stopEngine,
+    canvasRef, nextIdx, nextNextIdx, holdIdx, canHold, chain, timeDelta,
+    gameOver, containerWidth,
+    startEngine, dropFruit, swapHold, movePointer, stopEngine,
     pauseEngine, resumeEngine,
     activateBomb, expandContainer, triggerTimeFX,
-    getMergeCount,
-  } = useGame(handleScorePts, showToast, addTime, audio);
+    getMergeCount, getRunStats,
+  } = useGame(handleScorePts, showToast, addTime, audio, theme, recordMerge, handleCollapse);
 
   // Power-ups used during the current run — reported to the session log
   const powerUpsUsedRef = useRef({ bombs: 0, expands: 0 });
@@ -235,9 +266,10 @@ export default function App() {
     scoreRef.current = 0;
     powerUpsUsedRef.current = { bombs: 0, expands: 0 };
     gameStartTimeRef.current = Date.now();
+    beginRun();
     startEngine();
     startTimer(isGuestRef.current ? 25 : undefined);
-  }, [screen, startEngine, startTimer]);
+  }, [screen, startEngine, startTimer, beginRun]);
 
   // ── Submit score when SUBMITTING screen appears ─────────────────────────────
 
@@ -252,6 +284,10 @@ export default function App() {
     const durationSeconds = gameStartTimeRef.current
       ? Math.round((Date.now() - gameStartTimeRef.current) / 1000)
       : null;
+
+    // Settle local progression immediately — it's localStorage-only, so it must
+    // not wait on (or be lost to) a failed chain submit.
+    setRunSummary(finishRun({ score: submitted, ...getRunStats() }));
 
     (async () => {
       // Save session + leaderboard entry to Supabase first (non-blocking) so
@@ -358,9 +394,10 @@ export default function App() {
     setGuestTrialExpired(false);
     setScore(0);
     scoreRef.current = 0;
+    beginRun();
     startEngine();
     startTimer(25);
-  }, [startEngine, startTimer]);
+  }, [startEngine, startTimer, beginRun]);
 
   const handleStartGame = useCallback(async () => {
     // Discard any paused game and start fresh
@@ -429,6 +466,22 @@ export default function App() {
     }
   }, [buyPowerUp, shop, showToast]);
 
+  // ── Simple navigation handlers (new hub screens) ────────────────────────────
+
+  const onOpenModes      = useCallback(() => setScreen(S.MODE_SELECT), []);
+  const onOpenCodex      = useCallback(() => setScreen(S.CODEX), []);
+  const onOpenProfile    = useCallback(() => setScreen(S.PROFILE), []);
+  const onOpenSettings   = useCallback(() => setScreen(S.SETTINGS), []);
+  const onOpenLeaderboard = useCallback(() => setScreen(S.LEADERBOARD_FULL), []);
+  const onBackToHome     = useCallback(() => setScreen(S.HOME), []);
+
+  // Disconnecting only makes sense outside MiniPay — MiniPay auto-reconnects
+  // the injected wallet on a timer, so offering it there would just flicker.
+  const handleDisconnect = useCallback(() => {
+    disconnect();
+    setScreen(S.WALLET_CONNECT);
+  }, [disconnect]);
+
   // ── Screen routing ──────────────────────────────────────────────────────────
 
   // Low-gas modal overlays every post-connect screen.
@@ -470,13 +523,21 @@ export default function App() {
             isMiniPay={isMiniPay}
             leaderboard={leaderboard}
             leaderboardLoading={leaderboardLoading}
-            onStartGame={handleStartGame}
+            onOpenModes={onOpenModes}
             hasPausedGame={hasPausedGame}
             pausedScore={score}
             pausedRemaining={remaining}
             onContinueGame={handleContinueGame}
             onOpenLegal={setLegalModal}
             onOpenFAQ={() => setShowFAQ(true)}
+            onOpenSettings={onOpenSettings}
+            onOpenProfile={onOpenProfile}
+            onOpenCodex={onOpenCodex}
+            onOpenLeaderboard={onOpenLeaderboard}
+            progress={progress}
+            challenges={challenges}
+            challengesDone={challengesDone}
+            streakBroken={streakBroken}
           />
           {showTutorial && (
             <HowToPlay onDone={() => {
@@ -490,6 +551,54 @@ export default function App() {
       );
       break;
 
+    case S.MODE_SELECT:
+      currentScreen = (
+        <ModeSelect
+          onBack={onBackToHome}
+          onSelectMerge={handleStartGame}
+        />
+      );
+      break;
+
+    case S.CODEX:
+      currentScreen = <Codex onBack={onBackToHome} progress={progress} />;
+      break;
+
+    case S.PROFILE:
+      currentScreen = (
+        <Profile
+          profile={profile}
+          address={address}
+          onBack={onBackToHome}
+          onEditName={() => setScreen(S.SET_USERNAME)}
+        />
+      );
+      break;
+
+    case S.SETTINGS:
+      currentScreen = (
+        <Settings
+          onBack={onBackToHome}
+          muted={muted}
+          onToggleMute={toggleMute}
+          musicMuted={musicMuted}
+          onToggleMusic={toggleMusicMute}
+          onDisconnect={isMiniPay ? undefined : handleDisconnect}
+        />
+      );
+      break;
+
+    case S.LEADERBOARD_FULL:
+      currentScreen = (
+        <FullLeaderboard
+          onBack={onBackToHome}
+          entries={leaderboard}
+          loading={leaderboardLoading}
+          myUsername={profile?.username}
+        />
+      );
+      break;
+
     case S.STARTING:
       currentScreen = <Starting />;
       break;
@@ -500,6 +609,13 @@ export default function App() {
           canvasRef={canvasRef}
           nextIdx={nextIdx}
           nextNextIdx={nextNextIdx}
+          holdIdx={holdIdx}
+          canHold={canHold}
+          onSwapHold={swapHold}
+          chain={chain}
+          timeDelta={timeDelta}
+          discovery={discovery}
+          onDiscoveryDone={clearDiscovery}
           sessionStatus={sessionStatus}
           score={score}
           personalBest={profile?.personalBest ?? 0}
@@ -561,7 +677,10 @@ export default function App() {
           rank={resultRank}
           leaderboard={leaderboard}
           leaderboardLoading={leaderboardLoading}
-          onPlayAgain={() => setScreen(S.HOME)}
+          onPlayAgain={handleStartGame}
+          onGoHome={onBackToHome}
+          runSummary={runSummary}
+          progress={progress}
         />
       );
       break;

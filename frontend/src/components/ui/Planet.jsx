@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 export const PLANET_DATA = [
   { stage: 1,  name: 'Space Pebble',  short: 'Pebble',      color: '#9b8e8a' },
@@ -37,7 +38,7 @@ function renderFace(s) {
   );
 }
 
-function renderPlanet(stage, s, id) {
+function renderPlanet(stage, s, id, accentColor) {
   const r = s / 2, cx = s / 2, cy = s / 2;
 
   switch (stage) {
@@ -284,8 +285,8 @@ function renderPlanet(stage, s, id) {
             <stop offset="20%"  stopColor="#000"    stopOpacity="1" />
             <stop offset="35%"  stopColor="#e8682a" stopOpacity="1" />
             <stop offset="55%"  stopColor="#ffb85c" stopOpacity="0.9" />
-            <stop offset="80%"  stopColor="#7b2fff" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#7b2fff" stopOpacity="0" />
+            <stop offset="80%"  stopColor={accentColor} stopOpacity="0.5" />
+            <stop offset="100%" stopColor={accentColor} stopOpacity="0" />
           </radialGradient>
         </defs>
         <ellipse cx={cx} cy={cy} rx={r*1.3} ry={r*0.45} fill={`url(#${id}-disk)`}
@@ -305,6 +306,7 @@ function renderPlanet(stage, s, id) {
 }
 
 export default function Planet({ stage, size, glow = false, withFace = false, style = {} }) {
+  const { theme } = useTheme();
   const uid = useId().replace(/:/g, '');
   const p   = PLANET_DATA[stage - 1];
   const s   = size ?? (24 + stage * 4);
@@ -314,7 +316,7 @@ export default function Planet({ stage, size, glow = false, withFace = false, st
   return (
     <div style={{ width: s, height: s, position: 'relative', filter, flexShrink: 0, ...style }}>
       <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{ display: 'block', overflow: 'visible' }}>
-        {renderPlanet(stage, s, id)}
+        {renderPlanet(stage, s, id, theme.primary)}
         {withFace && stage === 1 && renderFace(s)}
       </svg>
     </div>

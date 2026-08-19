@@ -2,8 +2,10 @@ import { useState } from 'react';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import Spinner          from '../ui/Spinner.jsx';
 import { useUsername }  from '../../hooks/useUsername.js';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
 
 export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }) {
+  const { theme } = useTheme();
   const [value,      setValue]      = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -122,13 +124,13 @@ export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }
               <button onClick={handleSubmit} disabled={!canSubmit} style={{
                 width: '100%', height: 56, borderRadius: 16,
                 background: canSubmit
-                  ? 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)'
+                  ? theme.gradient
                   : 'rgba(255,255,255,0.08)',
                 border: 'none', color: canSubmit ? '#fff' : 'rgba(255,255,255,0.35)',
                 fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 17,
                 cursor: canSubmit ? 'pointer' : 'not-allowed',
                 boxShadow: canSubmit
-                  ? '0 10px 30px -8px rgba(123,47,255,0.6), inset 0 1px 0 rgba(255,255,255,0.25)'
+                  ? `0 10px 30px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`
                   : 'none',
                 transition: 'background .2s ease',
               }}>

@@ -79,12 +79,14 @@ export function useAudio() {
     } catch (_) {}
   }, []);
 
-  const playMerge = useCallback((tier = 0) => {
+  const playMerge = useCallback((tier = 0, chain = 1) => {
     if (_muted) return;
-    // tier 0–13: pitch and volume scale up
+    // tier 0–13: pitch and volume scale up.
+    // chain climbs the pitch further on each link so a cascade is audible
+    // before it's visible — the ear registers the combo faster than the eye.
     try {
       const ac   = getAC();
-      const freq = 280 + tier * 80;
+      const freq = 280 + tier * 80 + Math.max(0, chain - 1) * 55;
       const vol  = 0.12 + tier * 0.018;
       playOsc(ac, 'sine', freq,          vol,       0.01, 0.18);
       playOsc(ac, 'sine', freq * 1.5,    vol * 0.5, 0.02, 0.14);
@@ -129,6 +131,44 @@ export function useAudio() {
       filt.type  = 'lowpass'; filt.frequency.value = 1800;
       nenv.gain.setValueAtTime(0.38, now);
       nenv.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+      src.connect(filt); filt.connect(nenv); nenv.connect(ac.destination);
+      src.start(now);
+    } catch (_) {}
+  }, []);
+
+  // Gravity-well collapse — deliberately uglier and lower than playBomb so the
+  // ear learns "this cost me something" rather than "I did something good".
+  const playCollapse = useCallback(() => {
+    if (_muted) return;
+    try {
+      const ac  = getAC();
+      const now = ac.currentTime;
+
+      // Descending detuned groan
+      [0, 18].forEach((detune, i) => {
+        const osc = ac.createOscillator();
+        const env = ac.createGain();
+        osc.type = 'sawtooth';
+        osc.detune.setValueAtTime(detune, now);
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(38, now + 0.75);
+        env.gain.setValueAtTime(0, now);
+        env.gain.linearRampToValueAtTime(0.3 - i * 0.1, now + 0.03);
+        env.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+        const filt = ac.createBiquadFilter();
+        filt.type = 'lowpass'; filt.frequency.value = 700;
+        osc.connect(filt); filt.connect(env); env.connect(ac.destination);
+        osc.start(now); osc.stop(now + 0.85);
+      });
+
+      // Debris rumble
+      const src  = ac.createBufferSource();
+      const nenv = ac.createGain();
+      const filt = ac.createBiquadFilter();
+      src.buffer = noise(ac, 0.5);
+      filt.type  = 'lowpass'; filt.frequency.value = 900;
+      nenv.gain.setValueAtTime(0.3, now);
+      nenv.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
       src.connect(filt); filt.connect(nenv); nenv.connect(ac.destination);
       src.start(now);
     } catch (_) {}
@@ -212,5 +252,5 @@ export function useAudio() {
     dangerIntervalRef.current = null;
   }, []);
 
-  return { playDrop, playMerge, playReady, playBomb, playExpand, playTime, playGameOver, startDanger, stopDanger, muted, toggleMute };
+  return { playDrop, playMerge, playReady, playBomb, playCollapse, playExpand, playTime, playGameOver, startDanger, stopDanger, muted, toggleMute };
 }

@@ -79,6 +79,14 @@ export function useWallet() {
     return () => clearTimeout(timer);
   }, [inMiniPay, connect]);
 
+  // Clear local wallet state — does not revoke any on-chain permission, just
+  // forgets the address/client so the app returns to the connect screen.
+  const disconnect = useCallback(() => {
+    setAddress(null);
+    setWalletClient(null);
+    setError(null);
+  }, []);
+
   return {
     address,
     walletClient,
@@ -87,6 +95,7 @@ export function useWallet() {
     connect,
     connectWithSocial,
     socialLoading,
+    disconnect,
     error,
   };
 }

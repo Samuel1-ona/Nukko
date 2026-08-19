@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { FRUITS, drawFruitOnCtx } from '../../game/fruits.js';
 import { BombIcon, ExpandIcon, ClockIcon } from './Icons.jsx';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 // ── Planet rendered with the actual game engine ────────────────────────────
 function PlanetCanvas({ idx, size = 72 }) {
@@ -39,18 +40,19 @@ function VisualWelcome() {
 }
 
 function VisualDrop() {
+  const { theme } = useTheme();
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
 
       {/* Left: aim column */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-        <div style={{ filter: 'drop-shadow(0 0 10px #00d4ff88)' }}>
+        <div style={{ filter: `drop-shadow(0 0 10px rgba(${theme.secondaryRGB},0.53))` }}>
           <PlanetCanvas idx={4} size={60} />
         </div>
         {/* drop line */}
-        <div style={{ width: 2, height: 44, background: 'linear-gradient(to bottom, rgba(0,212,255,0.7), rgba(0,212,255,0))', borderRadius: 1 }} />
+        <div style={{ width: 2, height: 44, background: `linear-gradient(to bottom, rgba(${theme.secondaryRGB},0.7), rgba(${theme.secondaryRGB},0))`, borderRadius: 1 }} />
         {/* landing ghost */}
-        <div style={{ width: 50, height: 50, borderRadius: '50%', border: '2px dashed rgba(0,212,255,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 50, height: 50, borderRadius: '50%', border: `2px dashed rgba(${theme.secondaryRGB},0.45)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <PlanetCanvas idx={4} size={40} />
         </div>
       </div>
@@ -58,11 +60,11 @@ function VisualDrop() {
       {/* Right: labels */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👆</div>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `rgba(${theme.secondaryRGB},0.15)`, border: `1px solid rgba(${theme.secondaryRGB},0.5)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👆</div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: '"Nunito",system-ui', lineHeight: 1.3 }}>Drag to aim</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(123,47,255,0.15)', border: '1px solid rgba(123,47,255,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>🙌</div>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `rgba(${theme.primaryRGB},0.15)`, border: `1px solid rgba(${theme.primaryRGB},0.5)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>🙌</div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: '"Nunito",system-ui', lineHeight: 1.3 }}>Release to drop</span>
         </div>
       </div>
@@ -192,6 +194,7 @@ const SLIDES = [
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function HowToPlay({ onDone }) {
+  const { theme } = useTheme();
   const [step, setStep]     = useState(0);
   const [exiting, setExiting] = useState(false); // slide-exit direction
   const [dir, setDir]       = useState(1);        // 1 = forward, -1 = back
@@ -230,7 +233,7 @@ export default function HowToPlay({ onDone }) {
         border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: 28,
         overflow: 'hidden',
-        boxShadow: '0 24px 80px rgba(0,0,0,0.7), 0 0 80px rgba(123,47,255,0.18)',
+        boxShadow: `0 24px 80px rgba(0,0,0,0.7), 0 0 80px rgba(${theme.primaryRGB},0.18)`,
         animation: 'nukko-slide-up 0.28s cubic-bezier(.22,1,.36,1)',
       }}>
 
@@ -245,8 +248,8 @@ export default function HowToPlay({ onDone }) {
                 width: i === step ? 18 : 6, height: 6,
                 borderRadius: 3,
                 background: i === step
-                  ? 'linear-gradient(90deg, #7b2fff, #00d4ff)'
-                  : i < step ? 'rgba(123,47,255,0.55)' : 'rgba(255,255,255,0.15)',
+                  ? `linear-gradient(90deg, ${theme.primary}, ${theme.secondary})`
+                  : i < step ? `rgba(${theme.primaryRGB},0.55)` : 'rgba(255,255,255,0.15)',
                 transition: 'width 0.25s ease, background 0.25s ease',
               }} />
             ))}
@@ -318,15 +321,15 @@ export default function HowToPlay({ onDone }) {
             style={{
               flex: 1, height: 48,
               background: isLast
-                ? 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)'
-                : 'rgba(123,47,255,0.22)',
-              border: `1px solid ${isLast ? 'transparent' : 'rgba(123,47,255,0.45)'}`,
+                ? theme.gradient
+                : `rgba(${theme.primaryRGB},0.22)`,
+              border: `1px solid ${isLast ? 'transparent' : `rgba(${theme.primaryRGB},0.45)`}`,
               borderRadius: 14,
               fontSize: 15, fontWeight: 800,
               color: '#fff',
               fontFamily: '"Nunito",system-ui',
               cursor: 'pointer',
-              boxShadow: isLast ? '0 4px 24px rgba(123,47,255,0.45)' : 'none',
+              boxShadow: isLast ? `0 4px 24px rgba(${theme.primaryRGB},0.45)` : 'none',
               transition: 'background 0.2s, box-shadow 0.2s',
             }}
           >
