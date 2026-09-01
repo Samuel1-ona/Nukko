@@ -3,6 +3,7 @@ import CosmicBackground from '../ui/CosmicBackground.jsx';
 import NukkoWordmark    from '../ui/NukkoWordmark.jsx';
 import Planet           from '../ui/Planet.jsx';
 import Leaderboard      from '../ui/Leaderboard.jsx';
+import { isAdminWallet } from '../../utils/admin.js';
 
 function stageFromScore(score) {
   if (!score || score < 100)  return 2;
@@ -13,6 +14,80 @@ function stageFromScore(score) {
   if (score < 20000) return 10;
   if (score < 50000) return 12;
   return 13;
+}
+
+// ── Ladder entry point ───────────────────────────────────────────────────────
+
+function LadderCard({ ladder, unclaimedRewards, onOpen }) {
+  if (!ladder) return null;
+
+  // How far through this week's card the player is, averaged across the four
+  // objectives — enough to show momentum without repeating the whole panel.
+  const objectives = ladder.objectives ?? [];
+  const pct = objectives.length
+    ? Math.round((objectives.reduce((a, o) => a + o.fraction, 0) / objectives.length) * 100)
+    : 0;
+  const metCount = objectives.filter(o => o.met).length;
+
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        width: '100%', marginTop: 14, padding: '14px 16px', borderRadius: 18,
+        background: ladder.atRisk
+          ? 'linear-gradient(145deg, rgba(255,92,92,0.16) 0%, rgba(123,47,255,0.12) 100%)'
+          : 'linear-gradient(145deg, rgba(123,47,255,0.24) 0%, rgba(0,212,255,0.10) 100%)',
+        border: `1px solid ${ladder.atRisk ? 'rgba(255,92,92,0.4)' : 'rgba(255,255,255,0.12)'}`,
+        cursor: 'pointer', textAlign: 'left',
+        WebkitTapHighlightColor: 'transparent', position: 'relative',
+      }}
+    >
+      {unclaimedRewards > 0 && (
+        <div style={{
+          position: 'absolute', top: 10, right: 12,
+          padding: '3px 8px', borderRadius: 8, background: '#ffd700',
+          fontFamily: '"Nunito", system-ui', fontSize: 9, fontWeight: 900, color: '#08010f',
+        }}>
+          {unclaimedRewards} REWARD{unclaimedRewards > 1 ? 'S' : ''}
+        </div>
+      )}
+
+      <div style={{
+        fontFamily: '"Nunito", system-ui', fontSize: 9, fontWeight: 800,
+        letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)',
+      }}>
+        Level {ladder.level} of {ladder.maxLevel}
+      </div>
+      <div style={{
+        fontFamily: '"Nunito", system-ui', fontSize: 16, fontWeight: 900,
+        color: '#fff', lineHeight: 1.3, marginBottom: 8,
+      }}>
+        {ladder.badge}
+      </div>
+
+      <div style={{ height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.28)', overflow: 'hidden', marginBottom: 7 }}>
+        <div style={{
+          width: `${pct}%`, height: '100%', borderRadius: 3,
+          background: 'linear-gradient(90deg, #7b2fff, #00d4ff)',
+          transition: 'width 400ms ease',
+        }} />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{
+          fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 700,
+          color: ladder.atRisk ? '#ff5c5c' : 'rgba(255,255,255,0.55)',
+        }}>
+          {ladder.atRisk ? '⚠ Drops on Monday unless you clear it' : `${metCount}/4 objectives met`}
+        </span>
+        <span style={{
+          fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 800, color: '#00d4ff',
+        }}>
+          View →
+        </span>
+      </div>
+    </button>
+  );
 }
 
 function StatPill({ label, value, accent }) {
@@ -44,7 +119,7 @@ function fmt(s) {
   return [Math.floor(s / 60), s % 60].map(n => String(n).padStart(2, '0')).join(':');
 }
 
-export default function Home({ profile, address: walletAddress, isMiniPay, leaderboard, leaderboardLoading, onStartGame, onOpenLegal, onOpenFAQ, hasPausedGame, pausedScore, pausedRemaining, onContinueGame }) {
+export default function Home({ profile, address: walletAddress, isMiniPay, leaderboard, leaderboardLoading, onStartGame, onOpenLegal, onOpenFAQ, hasPausedGame, pausedScore, pausedRemaining, onContinueGame, ladder, unclaimedRewards = 0, onOpenLadder }) {
   const username  = profile?.username || 'Anonymous';
   const best      = profile?.personalBest ?? 0;
   const games     = profile?.gamesPlayed  ?? 0;
@@ -148,6 +223,13 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                 <StatPill label="Stage" value={`S${stage}`} accent="#a78bff" />
               </div>
             </div>
+
+            {/* ── Ladder card ─────────────────────────────────────────── */}
+            <LadderCard
+              ladder={ladder}
+              unclaimedRewards={unclaimedRewards}
+              onOpen={onOpenLadder}
+            />
 
             {/* Leaderboard */}
             <div style={{
@@ -289,6 +371,10 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                 { key: 'privacy', label: 'Privacy', action: () => onOpenLegal?.('privacy') },
                 { key: 'faq',     label: 'FAQ',     action: () => onOpenFAQ?.()            },
                 { key: 'about',   label: 'About',   action: () => onOpenLegal?.('about')   },
+                // Owner-only. Server-enforced — this just saves typing #admin.
+                ...(isAdminWallet(walletAddress)
+                  ? [{ key: 'admin', label: 'Admin', action: () => { window.location.hash = 'admin'; } }]
+                  : []),
               ].map(({ key, label, action }, i) => (
                 <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {i > 0 && <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>}
@@ -297,7 +383,9 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                     style={{
                       background: 'none', border: 'none', padding: '2px 4px',
                       fontFamily: 'inherit', fontSize: 'inherit',
-                      color: 'rgba(255,255,255,0.28)', cursor: 'pointer',
+                      color: key === 'admin' ? 'rgba(255,215,0,0.75)' : 'rgba(255,255,255,0.28)',
+                      fontWeight: key === 'admin' ? 800 : 'inherit',
+                      cursor: 'pointer',
                       textDecoration: 'underline', textUnderlineOffset: 2,
                     }}
                   >

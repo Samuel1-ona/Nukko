@@ -7,6 +7,8 @@ import { useGame }        from './hooks/useGame.js';
 import { useLeaderboard } from './hooks/useLeaderboard.js';
 import { usePurchase }    from './hooks/usePurchase.js';
 import { usePowerUps }   from './hooks/usePowerUps.js';
+import { useLadder }     from './hooks/useLadder.js';
+import { useRewards }    from './hooks/useRewards.js';
 import { useGasCheck }    from './hooks/useGasCheck.js';
 import { useBgMusic }     from './hooks/useBgMusic.js';
 import { isUserRejection } from './utils/miniPay.js';
@@ -26,6 +28,10 @@ import HowToPlay     from './components/ui/HowToPlay.jsx';
 import LowGasModal   from './components/ui/LowGasModal.jsx';
 import LegalModal    from './components/ui/LegalModal.jsx';
 import FAQModal      from './components/ui/FAQModal.jsx';
+import LadderModal   from './components/ui/LadderModal.jsx';
+import LevelUpModal  from './components/ui/LevelUpModal.jsx';
+import ClaimConfirmModal from './components/ui/ClaimConfirmModal.jsx';
+import Admin         from './components/screens/Admin.jsx';
 
 const S = {
   WALLET_CONNECT: 'WALLET_CONNECT',
@@ -60,6 +66,9 @@ export default function App() {
   useEffect(() => { isGuestRef.current = isGuestMode; }, [isGuestMode]);
   const [legalModal,    setLegalModal]    = useState(null); // 'terms'|'privacy'|'about'|null
   const [showFAQ,       setShowFAQ]       = useState(false);
+  const [showLadder,    setShowLadder]    = useState(false);
+  // Owner-only admin surface, reached at /#admin — never linked from the game.
+  const [isAdminRoute,  setIsAdminRoute]  = useState(() => window.location.hash === '#admin');
 
   // Refs prevent stale closures in timer/game callbacks
   const screenRef  = useRef(screen);
@@ -147,6 +156,17 @@ export default function App() {
     setSelectedToken: setPowerUpToken,
     loading:          powerUpLoading,
   } = usePowerUps(walletClient, address);
+
+  const ladderApi  = useLadder(address);
+  const rewardsApi = useRewards(address);
+
+  // ── Admin route (hash based — the app has no router) ───────────────────────
+
+  useEffect(() => {
+    const onHash = () => setIsAdminRoute(window.location.hash === '#admin');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // ── Load profile after wallet connects ─────────────────────────────────────
 
@@ -273,6 +293,11 @@ export default function App() {
         const newRecord = submitted > prevBest;
         setIsNewRecord(newRecord);
         setFinalScore(submitted);
+
+        // The score is now on-chain, so the ladder's verifiable counters can
+        // move. `fresh` skips the indexer's poll interval rather than making
+        // the player wait up to a minute to see the run counted.
+        ladderApi.sync({ fresh: true, silent: true });
 
         // Refresh leaderboard then find player's rank
         await refreshLeaderboard();
@@ -456,6 +481,9 @@ export default function App() {
             onContinueGame={handleContinueGame}
             onOpenLegal={setLegalModal}
             onOpenFAQ={() => setShowFAQ(true)}
+            ladder={ladderApi.ladder}
+            unclaimedRewards={rewardsApi.unclaimedCount}
+            onOpenLadder={() => setShowLadder(true)}
           />
           {showTutorial && (
             <HowToPlay onDone={() => {
@@ -549,6 +577,17 @@ export default function App() {
       currentScreen = null;
   }
 
+  if (isAdminRoute) {
+    return (
+      <Admin
+        address={address}
+        walletClient={walletClient}
+        onConnect={connect}
+        onExit={() => { window.location.hash = ''; setIsAdminRoute(false); }}
+      />
+    );
+  }
+
   return (
     <>
       {currentScreen}
@@ -560,6 +599,27 @@ export default function App() {
           onRecheck={recheckNow}
         />
       )}
+      <LadderModal
+        isOpen={showLadder}
+        onClose={() => setShowLadder(false)}
+        ladder={ladderApi.ladder}
+        levels={ladderApi.levels}
+        rewards={rewardsApi}
+      />
+
+      {/* Celebration — only fires for levels that actually paid out */}
+      <LevelUpModal
+        levels={ladderApi.celebrate}
+        onClose={ladderApi.clearCelebration}
+      />
+
+      {/* Step 2 of a claim, re-surfaced after the app returns from MiniPay */}
+      <ClaimConfirmModal
+        pending={rewardsApi.pending}
+        onConfirm={rewardsApi.confirm}
+        onDismiss={rewardsApi.dismissPending}
+      />
+
       {/* Splash screen sits on top of everything, self-dismisses after ~3s */}
       {!splashDone && (
         <SplashScreen onDone={() => setSplashDone(true)} />
