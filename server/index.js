@@ -3,6 +3,11 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 
+import { ladderRoutes } from './routes/ladder.js';
+import { adminRoutes } from './routes/admin.js';
+import { settleCashGrant } from './ladder/service.js';
+import { startIndexer } from './chain/indexer.js';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -11,6 +16,13 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
+
+// ─── Ladder ──────────────────────────────────────────────────
+// Mounted below the existing gameplay routes. The ladder never trusts a
+// client-reported counter: it derives them from on-chain events and
+// receipt-verified purchases (see server/chain/).
+app.use(ladderRoutes(supabase));
+app.use(adminRoutes(supabase, { settleCashGrant }));
 
 // ─── Players ─────────────────────────────────────────────────
 
@@ -233,4 +245,9 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ─── Start ───────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Nukko server running on :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Nukko server running on :${PORT}`);
+  // Keeps chain_events current so ladder counters are never stale. Each
+  // sync is incremental and skips if one is already in flight.
+  startIndexer(supabase);
+});

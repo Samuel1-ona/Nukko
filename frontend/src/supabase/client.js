@@ -18,7 +18,20 @@ export async function api(path, options = {}) {
         keepalive: isWrite,
         ...options,
       });
-      const data = await res.json();
+      // A 404 from a stale deployment returns an HTML error page, and
+      // res.json() then fails with "Unexpected token '<'", which hides the
+      // real problem. Read the body once and decide what it actually is.
+      const raw = await res.text();
+      let data;
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        const hint = res.status === 404
+          ? `${path} does not exist on the API server (${API_URL}) — it is probably running an older deploy`
+          : `${API_URL} returned ${res.status} ${res.statusText || ''}`.trim();
+        throw new Error(hint);
+      }
+
       if (!res.ok) {
         // Retry server errors (cold start / transient); client errors are final
         if (res.status >= 500 && attempt < RETRIES && isWrite) {

@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "node --watch index.js",
     "start": "node index.js",
-    "backfill": "node scripts/backfill-purchases.js"
+    "backfill": "node scripts/backfill-purchases.js",
+    "test": "node --test \"ladder/*.test.js\"",
+    "index-chain": "node scripts/index-chain.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "viem": "^2.56.1"
   }
 }

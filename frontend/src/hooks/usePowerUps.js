@@ -112,7 +112,11 @@ export function usePowerUps(walletClient, address) {
       } else {
         if (!walletRef.current) throw new Error('Wallet not connected');
         diagnosticContext.phase = 'walletClient.sendTransaction';
-        txHash = await walletRef.current.sendTransaction({ to: token.address, data: taggedData });
+        txHash = await walletRef.current.sendTransaction({
+          to:      token.address,
+          data:    taggedData,
+          account: address,   // explicit: a client built without one throws AccountNotFoundError
+        });
         diagnosticContext.txHash = txHash;
       }
 
