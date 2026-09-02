@@ -40,11 +40,31 @@ test('every level is strictly harder than the one before it', () => {
   }
 });
 
-test('levels 1 and 2 require no spending, and only one objective ever costs money', () => {
-  assert.equal(LEVELS[0].shopItems, 0);
-  assert.equal(LEVELS[1].shopItems, 0);
-  const paid = OBJECTIVE_KEYS.filter(k => LEVELS.some(l => k === 'shopItems' && l[k] > 0));
-  assert.deepEqual(paid, ['shopItems']);
+test('every level carries a shop objective — the ladder has no free tier', () => {
+  // Owner's decision, Sep 2026, overriding the original free-entry rule:
+  // clearing level 1 costs $0.10, so nobody progresses without spending.
+  for (const l of LEVELS) {
+    assert.ok(l.shopItems >= 1, `level ${l.level} has no shop objective`);
+  }
+  assert.equal(LEVELS[0].shopItems, 1);
+  assert.equal(LEVELS[11].shopItems, 20);
+});
+
+test('spending is confined to a single objective', () => {
+  // The other three must stay reachable by playing alone, or the ladder would
+  // be measuring wallet size in more than one place.
+  const spendKeys = OBJECTIVE_KEYS.filter(k => k === 'shopItems');
+  assert.deepEqual(spendKeys, ['shopItems']);
+});
+
+test('weekly shop cost matches the intended schedule at the cheapest tier', () => {
+  // Counters count PURCHASES, not items, so the cheapest route is N single
+  // $0.10 buys. This asserts the owner's cost-per-week column.
+  const expected = { 1: '0.10', 4: '0.40', 8: '1.00', 12: '2.00' };
+  for (const [level, cost] of Object.entries(expected)) {
+    const actual = (LEVELS[level - 1].shopItems * 0.10).toFixed(2);
+    assert.equal(actual, cost, `level ${level} weekly shop cost`);
+  }
 });
 
 test('every level has a badge and an in-game reward; cash only at 4, 8 and 12', () => {
@@ -89,13 +109,22 @@ test('a level clears only when ALL four objectives are met', () => {
 });
 
 test('a zero target counts as already met and never divides by zero', () => {
+  // No level currently sets a zero target — every one asks for at least one
+  // shop buy — but the guard has to hold for whatever the curve becomes next.
   assert.equal(meetsObjective(0, 0), true);
-  const progress = objectiveProgress(counters(), 1); // level 1 has shopItems: 0
+  assert.equal(meetsObjective(0, -1), true);
+
+  const progress = objectiveProgress(counters(), 1);
+  assert.ok(progress.every(p => Number.isFinite(p.fraction)), 'a fraction went NaN/Infinity');
+  assert.ok(progress.every(p => p.fraction >= 0 && p.fraction <= 1));
+});
+
+test('an unmet objective at zero progress reports 0, not NaN', () => {
+  const progress = objectiveProgress(counters(), 1);
   const shop = progress.find(p => p.key === 'shopItems');
-  assert.equal(shop.target, 0);
-  assert.equal(shop.met, true);
-  assert.equal(shop.fraction, 1);
-  assert.ok(progress.every(p => Number.isFinite(p.fraction)));
+  assert.equal(shop.target, 1);
+  assert.equal(shop.met, false);
+  assert.equal(shop.fraction, 0);
 });
 
 test('progress fractions are clamped to 0..1', () => {
