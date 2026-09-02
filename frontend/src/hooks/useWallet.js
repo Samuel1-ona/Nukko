@@ -124,6 +124,17 @@ export function useWallet() {
     return () => clearTimeout(timer);
   }, [inMiniPay, connect]);
 
+  // Clear local wallet state — does not revoke any on-chain permission, just
+  // forgets the address/client so the app returns to the connect screen.
+  const disconnect = useCallback(() => {
+    setAddress(null);
+    setWalletClient(null);
+    setError(null);
+    // Also forget the reconnect flag, otherwise the silent-reconnect effect
+    // would sign the user straight back in on the next mount.
+    try { localStorage.removeItem(RECONNECT_KEY); } catch { /* private mode */ }
+  }, []);
+
   // ── Silent reconnect for returning browser users ──────────────────────────
   // Only when they connected before AND the wallet still has us authorised, so
   // this never raises a prompt on a first visit.
@@ -197,6 +208,7 @@ export function useWallet() {
     connecting,
     connectWithSocial,
     socialLoading,
+    disconnect,
     error,
   };
 }

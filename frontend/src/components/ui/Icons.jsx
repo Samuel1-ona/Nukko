@@ -55,3 +55,68 @@ export function ClockIcon({ size = 13, color = 'currentColor' }) {
     </svg>
   );
 }
+
+/** X (Twitter) logo — used for the follow link and score sharing */
+export function XLogoIcon({ size = 14, color = '#fff' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path
+        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+/** Gear — used for the Settings entry point on Home */
+export function SettingsIcon({ size = 20, color = '#fff' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="3" stroke={color} strokeWidth="2"/>
+      <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h0a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v0a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" stroke={color} strokeWidth="1.6" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Ranked bars — used for the Leaderboard menu tile */
+export function RankingIcon({ size = 19, color = '#00d4ff' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="4" y="14" width="4.5" height="7" rx="1" fill={color}/>
+      <rect x="9.8" y="9" width="4.5" height="12" rx="1" fill={color}/>
+      <rect x="15.5" y="4" width="4.5" height="17" rx="1" fill={color}/>
+    </svg>
+  );
+}
+
+/** Trophy — used for the Codex menu tile */
+export function TrophyIcon({ size = 19, color = '#ffd700' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <path d="M7 4h10v3a5 5 0 0 1-10 0V4z" stroke={color} strokeWidth="2" strokeLinejoin="round"/>
+      <path d="M7 5H4.5A2.5 2.5 0 0 0 7 9M17 5h2.5A2.5 2.5 0 0 1 17 9" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      <path d="M12 12v3.5M9 20h6M9.5 20l.8-3.5h3.4l.8 3.5" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Person silhouette — used for the Profile menu tile */
+export function ProfileIcon({ size = 19, color = '#ff2e9e' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <circle cx="12" cy="8" r="4" stroke={color} strokeWidth="2"/>
+      <path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+/** Padlock — used for locked/"coming soon" tiles (Mode Select) */
+export function LockIcon({ size = 10, color = 'rgba(255,255,255,0.7)' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+      <rect x="5" y="11" width="14" height="9" rx="2" stroke={color} strokeWidth="2"/>
+      <path d="M8 11V7.5a4 4 0 0 1 8 0V11" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="12" cy="15.2" r="1.2" fill={color}/>
+    </svg>
+  );
+}

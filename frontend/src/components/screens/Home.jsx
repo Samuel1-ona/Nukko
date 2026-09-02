@@ -4,6 +4,33 @@ import NukkoWordmark    from '../ui/NukkoWordmark.jsx';
 import Planet           from '../ui/Planet.jsx';
 import Leaderboard      from '../ui/Leaderboard.jsx';
 import { isAdminWallet } from '../../utils/admin.js';
+import { XLogoIcon, SettingsIcon, RankingIcon, TrophyIcon, ProfileIcon } from '../ui/Icons.jsx';
+import { openXProfile, X_HANDLE } from '../../utils/social.js';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
+import { PLANET_DATA }  from '../ui/Planet.jsx';
+import { levelProgress, titleForLevel } from '../../game/progression.js';
+
+function MenuTile({ icon, label, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+      padding: '14px 6px', borderRadius: 18,
+      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
+      cursor: 'pointer',
+    }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.06)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {icon}
+      </div>
+      <div style={{
+        fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 700,
+        color: '#fff', textAlign: 'center',
+      }}>{label}</div>
+    </button>
+  );
+}
 
 function stageFromScore(score) {
   if (!score || score < 100)  return 2;
@@ -119,11 +146,16 @@ function fmt(s) {
   return [Math.floor(s / 60), s % 60].map(n => String(n).padStart(2, '0')).join(':');
 }
 
-export default function Home({ profile, address: walletAddress, isMiniPay, leaderboard, leaderboardLoading, onStartGame, onOpenLegal, onOpenFAQ, hasPausedGame, pausedScore, pausedRemaining, onContinueGame, ladder, unclaimedRewards = 0, onOpenLadder }) {
+export default function Home({ profile, address: walletAddress, isMiniPay, leaderboard, leaderboardLoading, onOpenModes, onOpenLegal, onOpenFAQ, onOpenSettings, onOpenProfile, onOpenCodex, onOpenLeaderboard, hasPausedGame, pausedScore, pausedRemaining, onContinueGame, progress, challenges, challengesDone, streakBroken, ladder, unclaimedRewards = 0, onOpenLadder }) {
+  const { theme } = useTheme();
   const username  = profile?.username || 'Anonymous';
   const best      = profile?.personalBest ?? 0;
   const games     = profile?.gamesPlayed  ?? 0;
   const stage     = stageFromScore(best);
+  const codexFound = progress?.discovered?.length ?? 0;
+  const codexTotal = PLANET_DATA.length;
+  const streak     = streakBroken ? 0 : (progress?.streak ?? 0);
+  const rank       = levelProgress(progress?.xp ?? 0);
   // Prefer direct wallet address over profile.address — profile may not include it
   const addr      = walletAddress || profile?.address || '';
   const shortAddr = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '';
@@ -152,15 +184,26 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
             padding: '20px 20px 0',
           }}>
             <NukkoWordmark size={28} />
+            <button
+              onClick={onOpenSettings}
+              style={{
+                width: 40, height: 40, borderRadius: 99,
+                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <SettingsIcon size={20} color="#fff" />
+            </button>
           </div>
 
           {/* ── Scrollable body ─────────────────────────────────────────── */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 8px' }}>
 
-            {/* Player card */}
-            <div style={{
+            {/* Player card — tappable, opens Profile */}
+            <div onClick={onOpenProfile} style={{
+              cursor: 'pointer',
               borderRadius: 22, padding: '18px 18px 16px',
-              background: 'linear-gradient(145deg, rgba(123,47,255,0.32) 0%, rgba(0,212,255,0.14) 100%)',
+              background: `linear-gradient(145deg, rgba(${theme.primaryRGB},0.32) 0%, rgba(${theme.secondaryRGB},0.14) 100%)`,
               border: '1px solid rgba(255,255,255,0.12)',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14)',
             }}>
@@ -182,9 +225,15 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                   }}>
                     {username}
                   </div>
+                  <div style={{
+                    marginTop: 1, fontFamily: '"Nunito", system-ui', fontSize: 11,
+                    fontWeight: 700, color: 'rgba(255,255,255,0.6)',
+                  }}>
+                    {titleForLevel(rank.level)}
+                  </div>
                   {shortAddr && !isMiniPay && (
                     <button
-                      onClick={copyAddress}
+                      onClick={(e) => { e.stopPropagation(); copyAddress(); }}
                       style={{
                         marginTop: 4, padding: '3px 8px',
                         borderRadius: 8,
@@ -219,8 +268,8 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
               {/* Stats row */}
               <div style={{ display: 'flex', gap: 8 }}>
                 <StatPill label="Best" value={best > 0 ? best.toLocaleString() : '–'} accent="#ffd700" />
-                <StatPill label="Games" value={games > 0 ? games.toLocaleString() : '0'} accent="#00d4ff" />
-                <StatPill label="Stage" value={`S${stage}`} accent="#a78bff" />
+                <StatPill label="Games" value={games > 0 ? games.toLocaleString() : '0'} accent={theme.secondary} />
+                <StatPill label="Rank" value={`${rank.level}`} accent="#a78bff" />
               </div>
             </div>
 
@@ -230,6 +279,70 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
               unclaimedRewards={unclaimedRewards}
               onOpen={onOpenLadder}
             />
+            {/* Menu tiles */}
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              <MenuTile icon={<RankingIcon size={18} color={theme.secondary} />} label="Leaderboard" onClick={onOpenLeaderboard} />
+              <MenuTile
+                icon={<TrophyIcon size={18} color="#ffd700" />}
+                label={`Codex ${codexFound}/${codexTotal}`}
+                onClick={onOpenCodex}
+              />
+              <MenuTile icon={<ProfileIcon size={18} color={theme.primary} />} label="Profile" onClick={onOpenProfile} />
+            </div>
+
+            {/* ── Daily challenges + streak ──────────────────────────────── */}
+            {challenges?.length > 0 && (
+              <div style={{
+                marginTop: 14, borderRadius: 18, padding: '13px 15px',
+                background: 'rgba(255,255,255,0.035)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginBottom: 9, gap: 8,
+                }}>
+                  <span style={{
+                    fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 800,
+                    letterSpacing: '0.14em', textTransform: 'uppercase',
+                    color: 'rgba(255,255,255,0.45)',
+                  }}>Today's challenges</span>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 800,
+                    color: streak > 0 && !streakBroken ? '#ffd700' : 'rgba(255,255,255,0.35)',
+                  }}>
+                    🔥 {streak} day{streak === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {challenges.map(c => {
+                    const done = challengesDone?.includes(c.id);
+                    return (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <div style={{
+                          width: 16, height: 16, borderRadius: 5, flexShrink: 0,
+                          background: done ? '#00e676' : 'rgba(255,255,255,0.07)',
+                          border: `1px solid ${done ? '#00e676' : 'rgba(255,255,255,0.16)'}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {done && (
+                            <svg width="9" height="9" viewBox="0 0 14 14" fill="none">
+                              <path d="M2.5 7.2 5.8 10 11.5 3.5" stroke="#06210f" strokeWidth="2.6"
+                                strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                        <span style={{
+                          fontFamily: '"Nunito", system-ui', fontSize: 12,
+                          color: done ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.8)',
+                          textDecoration: done ? 'line-through' : 'none',
+                        }}>{c.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Leaderboard */}
             <div style={{
@@ -242,12 +355,12 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
               }}>
                 Cosmic Leaderboard
               </div>
-              <div style={{
-                fontFamily: '"Nunito", system-ui', fontSize: 11,
-                color: 'rgba(255,255,255,0.35)',
+              <button onClick={onOpenLeaderboard} style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 700, color: theme.secondary,
               }}>
-                live · 30s
-              </div>
+                See all
+              </button>
             </div>
 
             <Leaderboard
@@ -276,8 +389,8 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '10px 14px', borderRadius: 14,
-                  background: 'rgba(123,47,255,0.12)',
-                  border: '1px solid rgba(123,47,255,0.3)',
+                  background: `rgba(${theme.primaryRGB},0.12)`,
+                  border: `1px solid rgba(${theme.primaryRGB},0.3)`,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#a78bff', boxShadow: '0 0 6px #a78bff', animation: 'nukko-pulse 0.9s ease-in-out infinite alternate' }} />
@@ -306,11 +419,11 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                   onClick={onContinueGame}
                   style={{
                     width: '100%', height: 58, borderRadius: 18,
-                    background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                    background: theme.gradient,
                     border: 'none', color: '#fff',
                     fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 18,
                     cursor: 'pointer',
-                    boxShadow: '0 12px 36px -8px rgba(123,47,255,0.6), inset 0 1px 0 rgba(255,255,255,0.25)',
+                    boxShadow: `0 12px 36px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`,
                     animation: 'nukko-glow-pulse 2.4s ease-in-out infinite',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
                   }}
@@ -324,7 +437,7 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
 
                 {/* New game — ghost secondary */}
                 <button
-                  onClick={onStartGame}
+                  onClick={onOpenModes}
                   style={{
                     width: '100%', height: 42, borderRadius: 14,
                     background: 'transparent',
@@ -342,15 +455,15 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
               /* ── Normal Play Now ────────────────────────────────────── */
               <>
                 <button
-                  onClick={onStartGame}
+                  onClick={onOpenModes}
                   style={{
                     pointerEvents: 'all',
                     width: '100%', height: 58, borderRadius: 18,
-                    background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                    background: theme.gradient,
                     border: 'none', color: '#fff',
                     fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 18,
                     cursor: 'pointer',
-                    boxShadow: '0 12px 36px -8px rgba(123,47,255,0.6), inset 0 1px 0 rgba(255,255,255,0.25)',
+                    boxShadow: `0 12px 36px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`,
                     animation: 'nukko-glow-pulse 2.4s ease-in-out infinite',
                     letterSpacing: '0.02em',
                   }}
@@ -359,6 +472,27 @@ export default function Home({ profile, address: walletAddress, isMiniPay, leade
                 </button>
               </>
             )}
+
+            {/* Follow on X */}
+            <div style={{
+              display: 'flex', justifyContent: 'center',
+              marginTop: 12, pointerEvents: 'all',
+            }}>
+              <button
+                onClick={openXProfile}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '7px 16px', borderRadius: 99,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                  color: 'rgba(255,255,255,0.75)', cursor: 'pointer',
+                  fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 12,
+                }}
+              >
+                <XLogoIcon size={13} color="rgba(255,255,255,0.75)" />
+                Follow {X_HANDLE}
+              </button>
+            </div>
 
             {/* Legal footer */}
             <div style={{

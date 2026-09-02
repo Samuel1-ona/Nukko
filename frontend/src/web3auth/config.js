@@ -36,7 +36,7 @@ export const web3auth = new Web3Auth({
     defaultLanguage: 'en',
     modalZIndex: '99999',
     theme: {
-      primary: '#7b2fff',
+      primary: '#ff2e9e',
     },
   },
 });

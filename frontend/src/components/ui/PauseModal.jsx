@@ -1,3 +1,5 @@
+import { useTheme } from '../../theme/ThemeContext.jsx';
+
 function PlayIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -94,6 +96,7 @@ function ToggleRow({ icon, offIcon, label, active, onToggle, accentColor }) {
 }
 
 export default function PauseModal({ onResume, onGoHome, muted, onToggleMute, musicMuted, onToggleMusic }) {
+  const { theme } = useTheme();
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 150,
@@ -109,7 +112,7 @@ export default function PauseModal({ onResume, onGoHome, muted, onToggleMute, mu
         background: 'linear-gradient(160deg, #1a0b32 0%, #0f0520 100%)',
         border: '1px solid rgba(255,255,255,0.09)',
         borderRadius: 24,
-        boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(123,47,255,0.15)',
+        boxShadow: `0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(${theme.primaryRGB},0.15)`,
         animation: 'nukko-score-pop 0.22s cubic-bezier(.22,1,.36,1)',
         overflow: 'hidden',
       }}>
@@ -122,8 +125,8 @@ export default function PauseModal({ onResume, onGoHome, muted, onToggleMute, mu
         }}>
           <div style={{
             width: 48, height: 48, borderRadius: 16,
-            background: 'rgba(123,47,255,0.15)',
-            border: '1px solid rgba(123,47,255,0.3)',
+            background: `rgba(${theme.primaryRGB},0.15)`,
+            border: `1px solid rgba(${theme.primaryRGB},0.3)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: 4,
           }}>
@@ -152,12 +155,12 @@ export default function PauseModal({ onResume, onGoHome, muted, onToggleMute, mu
           {/* Resume */}
           <button onClick={onResume} style={{
             width: '100%', height: 54, borderRadius: 14,
-            background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+            background: theme.gradient,
             border: 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 16, color: '#fff',
             cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(123,47,255,0.4)',
+            boxShadow: `0 4px 20px rgba(${theme.primaryRGB},0.4)`,
           }}>
             <PlayIcon />
             Resume

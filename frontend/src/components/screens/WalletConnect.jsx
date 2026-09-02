@@ -2,6 +2,7 @@ import { useState } from 'react';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import NukkoMascot      from '../ui/NukkoMascot.jsx';
 import NukkoWordmark    from '../ui/NukkoWordmark.jsx';
+import { useTheme }     from '../../theme/ThemeContext.jsx';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ function LoadingDots() {
 // ── Main screen ────────────────────────────────────────────────────────────
 
 export default function WalletConnect({ address, onConnect, onConnectSocial, socialLoading, isMiniPay, error, onPlayAsGuest }) {
+  const { theme } = useTheme();
   const [open,          setOpen]          = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
   const [copied,        setCopied]        = useState(false);
@@ -201,7 +203,7 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                       border: '1px solid rgba(255,255,255,0.12)',
                       borderRadius: 20,
                       overflow: 'hidden',
-                      boxShadow: '0 -8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(123,47,255,0.15)',
+                      boxShadow: `0 -8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(${theme.primaryRGB},0.15)`,
                       animation: 'nukko-slide-up 0.22s cubic-bezier(.22,1,.36,1)',
                     }}>
                       {/* Handle */}
@@ -218,8 +220,8 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                           style={{
                             width: '100%', padding: '14px 16px',
                             borderRadius: 14,
-                            background: 'linear-gradient(135deg, rgba(123,47,255,0.22) 0%, rgba(0,212,255,0.12) 100%)',
-                            border: '1px solid rgba(123,47,255,0.5)',
+                            background: `linear-gradient(135deg, rgba(${theme.primaryRGB},0.22) 0%, rgba(${theme.secondaryRGB},0.12) 100%)`,
+                            border: `1px solid rgba(${theme.primaryRGB},0.5)`,
                             cursor: 'pointer', textAlign: 'left',
                             display: 'flex', alignItems: 'center', gap: 12,
                             transition: 'background 0.15s',
@@ -233,7 +235,7 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                             <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <XIcon />
                             </div>
-                            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(123,47,255,0.25)', border: '1px solid rgba(123,47,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 10, background: `rgba(${theme.primaryRGB},0.25)`, border: `1px solid rgba(${theme.primaryRGB},0.4)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <EmailIcon />
                             </div>
                           </div>
@@ -303,13 +305,13 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                   style={{
                     width: '100%', height: 58, borderRadius: 18,
                     background: anyLoading
-                      ? 'rgba(123,47,255,0.35)'
-                      : 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                      ? `rgba(${theme.primaryRGB},0.35)`
+                      : theme.gradient,
                     border: 'none', color: '#fff',
                     fontFamily: '"Nunito", system-ui', fontWeight: 800,
                     fontSize: 17, cursor: anyLoading ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                    boxShadow: anyLoading ? 'none' : '0 12px 36px -8px rgba(123,47,255,0.65), inset 0 1px 0 rgba(255,255,255,0.2)',
+                    boxShadow: anyLoading ? 'none' : `0 12px 36px -8px rgba(${theme.primaryRGB},0.65), inset 0 1px 0 rgba(255,255,255,0.2)`,
                     animation: anyLoading ? 'none' : 'nukko-glow-pulse 2.4s ease-in-out infinite',
                     transition: 'background 0.2s, box-shadow 0.2s',
                   }}

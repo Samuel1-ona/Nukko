@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 const SUPPORT_EMAIL = 'studioscracked@gmail.com';
 
@@ -60,6 +61,7 @@ const FAQ_ITEMS = [
 // ── Accordion row ────────────────────────────────────────────────────────────
 
 function FAQRow({ item, isOpen, onToggle }) {
+  const { theme } = useTheme();
   return (
     <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
       <button
@@ -69,7 +71,7 @@ function FAQRow({ item, isOpen, onToggle }) {
           justifyContent: 'space-between', gap: 12,
           padding: '14px 20px', textAlign: 'left', background: 'none', border: 'none',
           cursor: 'pointer',
-          backgroundColor: isOpen ? 'rgba(123,47,255,0.08)' : 'transparent',
+          backgroundColor: isOpen ? `rgba(${theme.primaryRGB},0.08)` : 'transparent',
         }}
       >
         <span style={{
@@ -118,6 +120,7 @@ function CloseIcon() {
 // ── Main modal ───────────────────────────────────────────────────────────────
 
 export default function FAQModal({ isOpen, onClose }) {
+  const { theme } = useTheme();
   const [openIndex, setOpenIndex] = useState(null);
 
   const toggle = (i) => setOpenIndex((prev) => (prev === i ? null : i));
@@ -162,10 +165,10 @@ export default function FAQModal({ isOpen, onClose }) {
           display: 'flex', flexDirection: 'column',
           height: '90dvh', maxHeight: '90dvh',
           background: 'linear-gradient(180deg, #110526 0%, #0a0015 100%)',
-          border: '1px solid rgba(123,47,255,0.35)',
+          border: `1px solid rgba(${theme.primaryRGB},0.35)`,
           borderBottom: 'none',
           borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -12px 48px rgba(123,47,255,0.25)',
+          boxShadow: `0 -12px 48px rgba(${theme.primaryRGB},0.25)`,
           animation: 'legalSlideUp 280ms cubic-bezier(0.22,1,0.36,1) both',
         }}
       >
@@ -226,10 +229,10 @@ export default function FAQModal({ isOpen, onClose }) {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 height: 50, borderRadius: 14, textDecoration: 'none',
-                background: 'linear-gradient(135deg, #7b2fff 0%, #00d4ff 100%)',
+                background: theme.gradient,
                 fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 13,
                 color: '#fff', letterSpacing: '0.04em',
-                boxShadow: '0 8px 24px -6px rgba(123,47,255,0.5)',
+                boxShadow: `0 8px 24px -6px rgba(${theme.primaryRGB},0.5)`,
               }}
             >
               Contact Support

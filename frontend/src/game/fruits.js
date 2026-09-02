@@ -16,8 +16,36 @@ export const FRUITS = [
   { name: 'Black Hole',    r: 126, color: '#4b0082', pts: 260, stage: 14 },
 ];
 
+// ── Spawn bag ─────────────────────────────────────────────────────────────────
+// Weighted shuffle-bag instead of an independent uniform roll. Two reasons:
+//  1. Uniform-across-6 spawned Dwarf Planets (a large body) as often as Pebbles,
+//     so runs could be decided by RNG before the player acted.
+//  2. A bag guarantees the *distribution* over every 15 drops, eliminating the
+//     droughts and floods that make a lost run feel stolen rather than earned.
+// Only the five smallest bodies spawn — larger ones must be earned by merging.
+//
+// This is also the single choke point for spawn randomness: swapping Math.random
+// here for a seeded PRNG is all that's needed for reproducible/fair-seeded runs.
+const SPAWN_BAG = [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4]; // 33/27/20/13/7%
+
+let bag = [];
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** Reset the bag so each run draws an independent sequence. */
+export function resetBag() {
+  bag = [];
+}
+
 export function randFruitIdx() {
-  return Math.floor(Math.random() * 6);
+  if (bag.length === 0) bag = shuffle([...SPAWN_BAG]);
+  return bag.pop();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

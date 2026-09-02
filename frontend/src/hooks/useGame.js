@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Matter from 'matter-js';
-import { FRUITS, randFruitIdx, drawFruitOnCtx } from '../game/fruits.js';
+import { FRUITS, randFruitIdx, resetBag, drawFruitOnCtx } from '../game/fruits.js';
 
 const { Engine, Bodies, Events, Composite, World, Body } = Matter;
 
@@ -9,10 +9,28 @@ const MAX_W         = 440;
 const EXPAND_PX     = 30;
 const H             = 480;
 const WALL          = 60;
-const DANGER_Y      = 105;
-const DROP_COOLDOWN = 380;
-const CHAIN_WINDOW  = 450; // ms — merges within this window count as a chain
-const CHAIN_MAX     = 8;   // multiplier cap
+const DANGER_Y      = 85;
+const DROP_COOLDOWN = 300;
+
+// ── Chain combos ──────────────────────────────────────────────────────────────
+// The window was 450ms, which is too short to *plan* a cascade — chains happened
+// by physics accident, making the largest scoring lever in the game effectively
+// random. A wider, self-extending window converts chains from luck into a skill
+// the player can learn, set up, and see coming (see the chain meter in the HUD).
+const CHAIN_WINDOW     = 1200; // ms — base window after a merge
+const CHAIN_EXTEND     = 150;  // ms added per link, so long chains stay reachable
+const CHAIN_WINDOW_MAX = 2000;
+const CHAIN_MAX        = 6;    // multiplier cap (was 8, when chains were unreachable)
+const CHAIN_SLOPE      = 0.4;  // multiplier = 1 + (chain - 1) * SLOPE → 3.0x at cap
+
+// ── Gravity Well Collapse ─────────────────────────────────────────────────────
+// Breaching the danger line costs time instead of ending the run, which makes
+// the timer the single fail state and turns the line into a risk/reward dial:
+// stack high for merge opportunities, or stay low and keep your clock.
+// The time cost is a *halving* of whatever is left (see useTimer.halveTime),
+// not a flat subtraction — proportional punishment that scales with the run.
+const COLLAPSE_VAPORIZE  = 4;    // planets removed from the top of the stack
+const COLLAPSE_IMMUNITY  = 1500; // ms — lets debris settle before re-arming
 
 // ── Landing preview helper ────────────────────────────────────────────────────
 // Returns the Y coordinate where a falling fruit of radius `fruitR` centred at
@@ -33,9 +51,13 @@ function estimateLandingY(dropX, fruitR, bodies, containerW) {
   return Math.max(fruitR + 5, bestY);
 }
 
+// Time is the only fail state now, so big merges have to feel like a lifeline —
+// "merge big to buy more time to merge big" is the core skill loop. The old
+// +1s/+3s was too small to register as a reward at all.
 function mergeTimeBonus(newIdx) {
-  if (newIdx >= 8) return 3;
-  if (newIdx >= 5) return 1;
+  if (newIdx >= 10) return 8; // Brown Dwarf and beyond
+  if (newIdx >= 7)  return 5; // Ocean Planet → Gas Giant
+  if (newIdx >= 4)  return 2; // Moon → Rocky Planet
   return 0;
 }
 
@@ -43,9 +65,10 @@ function haptic(pattern) {
   try { navigator.vibrate?.(pattern); } catch (_) {}
 }
 
-export function useGame(onScorePts, onToast, onAddTime, audio) {
+export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMerge, onCollapse) {
   const canvasRef = useRef(null);
   const ctxRef    = useRef(null); // cached 2D context
+  const themeRef  = useRef(themeColors);
 
   const engineRef     = useRef(null);
   const worldRef      = useRef(null);
@@ -64,6 +87,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
   const landingFXRef      = useRef(new Map());
   const shakeFXRef        = useRef(null);
   const bombFXRef         = useRef(null);
+  const collapseFXRef     = useRef(null);
   const expandFXRef       = useRef(null);
   const wallGlowRef       = useRef(null);
   const timeFXRef         = useRef(null);
@@ -83,17 +107,24 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
   const currentIdxRef  = useRef(0);
   const nextIdxRef     = useRef(0);
   const nextNextIdxRef = useRef(0);
+  const holdIdxRef     = useRef(null); // banked planet, null when empty
+  const canHoldRef     = useRef(true); // one swap per drop
   const canDropRef     = useRef(true);
   const gameOverRef    = useRef(false);
   const isDangerRef    = useRef(false);
-  // Game-over debounce
-  const lastDropTimeRef    = useRef(0);
-  const gameOverPendingRef = useRef(false);
+  // Collapse debounce + post-collapse immunity
+  const lastDropTimeRef      = useRef(0);
+  const collapsePendingRef   = useRef(false);
+  const collapseImmuneUntil  = useRef(0);
   // Chain combo
-  const chainCountRef  = useRef(0);
+  const chainCountRef    = useRef(0);
   const lastMergeTimeRef = useRef(0);
-  // Total merges this run — reported to the session log at game over
-  const mergeCountRef = useRef(0);
+  const chainExpiresRef  = useRef(0); // timestamp the current chain lapses
+  // Run stats — read by the progression layer at game over
+  const mergeCountRef    = useRef(0);
+  const maxChainRef      = useRef(0);
+  const collapseCountRef = useRef(0);
+  const mergesByStageRef = useRef({});
   // Visibility
   const visHandlerRef  = useRef(null);
   const lastTimeRef    = useRef(0);
@@ -101,24 +132,44 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
   const onScoreRef    = useRef(onScorePts);
   const onToastRef    = useRef(onToast);
   const onAddTimeRef  = useRef(onAddTime);
+  const onMergeRef    = useRef(onMerge);
+  const onCollapseRef = useRef(onCollapse);
   const audioRef      = useRef(audio);
 
-  useEffect(() => { onScoreRef.current   = onScorePts; }, [onScorePts]);
-  useEffect(() => { onToastRef.current   = onToast;    }, [onToast]);
-  useEffect(() => { onAddTimeRef.current = onAddTime;  }, [onAddTime]);
-  useEffect(() => { audioRef.current     = audio;      }, [audio]);
+  useEffect(() => { onScoreRef.current    = onScorePts; }, [onScorePts]);
+  useEffect(() => { onToastRef.current    = onToast;    }, [onToast]);
+  useEffect(() => { onAddTimeRef.current  = onAddTime;  }, [onAddTime]);
+  useEffect(() => { onMergeRef.current    = onMerge;    }, [onMerge]);
+  useEffect(() => { onCollapseRef.current = onCollapse; }, [onCollapse]);
+  useEffect(() => { audioRef.current      = audio;      }, [audio]);
+  // Ambient canvas colors only — power-up FX (bomb/expand/time) keep their
+  // own fixed semantic colors regardless of theme.
+  useEffect(() => {
+    themeRef.current = themeColors;
+    gradCacheRef.current = {}; // invalidate cached gradients on theme change
+  }, [themeColors]);
 
   const [currentIdx,     setCurrentIdx]     = useState(() => randFruitIdx());
   const [nextIdx,        setNextIdx]        = useState(() => randFruitIdx());
   const [nextNextIdx,    setNextNextIdx]    = useState(() => randFruitIdx());
+  const [holdIdx,        setHoldIdx]        = useState(null);
+  const [canHold,        setCanHold]        = useState(true);
   const [gameOver,       setGameOver]       = useState(false);
   const [containerWidth, setContainerWidth] = useState(BASE_W);
+  // Small "+Ns" pulse beside the clock when a merge grants time
+  // Signed time change to pulse beside the clock: + from a big merge, − from a
+  // gravity-well collapse. One channel so both read from the same place.
+  const [timeDelta,      setTimeDelta]      = useState(null);
+  // Mirrors chain state into React so the HUD meter can render it
+  const [chain,          setChain]          = useState({ count: 0, expiresAt: 0, key: 0 });
 
   // ── Fruit body creation ─────────────────────────────────────────────────────
   const addFruitBody = useCallback((x, y, idx) => {
     const f    = FRUITS[idx];
     const body = Bodies.circle(x, y, f.r, {
-      restitution: Math.max(0.05, 0.2 - idx * 0.015),
+      // Small bodies bounce and roll a little; the settle-and-nudge cascade is
+      // where a merge board's best emergent moments come from.
+      restitution: Math.max(0.08, 0.28 - idx * 0.018),
       friction:    0.5,
       frictionAir: idx * 0.0015,
       label:       'fruit',
@@ -194,17 +245,39 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     ctx.fillStyle = '#050009';
     ctx.fillRect(0, 0, cw, H);
 
-    // ── Danger flash — red vignette pulsing over entire canvas ───────────────
-    if (isDangerRef.current) {
-      const pulse = 0.5 + 0.5 * Math.sin((now / 280) * Math.PI);
-      // radial vignette: transparent centre → red edges
+    // ── Danger state (computed early so both the approach-warning tint below
+    // and the hazard barrier/badge/gauge later in the frame share one value) ──
+    const bodies = bodiesRef.current;
+    let minBodyTop = H;
+    for (const b of bodies) {
+      const top = b.position.y - FRUITS[b.fruitIdx].r;
+      if (top < minBodyTop) minBodyTop = top;
+    }
+    const isInDanger = minBodyTop < DANGER_Y && bodies.some(
+      b => b.speed < 2.0 && b.position.y - FRUITS[b.fruitIdx].r < DANGER_Y,
+    );
+    // Trigger/stop danger heartbeat audio
+    if (isInDanger && !isDangerRef.current) {
+      isDangerRef.current = true;
+      audioRef.current?.startDanger?.();
+    } else if (!isInDanger && isDangerRef.current) {
+      isDangerRef.current = false;
+      audioRef.current?.stopDanger?.();
+    }
+    const stackFill = Math.max(0, Math.min(1, (H - minBodyTop) / (H - DANGER_Y)));
+
+    // ── Approach-warning tint — ramps in smoothly well before the stack
+    // actually breaches the line, so the player gets an early, gentle cue
+    // instead of a sudden flash right at game-over. Capped low so it never
+    // reads as aggressive strobing.
+    const warnStart = 0.55;
+    if (stackFill > warnStart) {
+      const warnT = Math.min(1, (stackFill - warnStart) / (1 - warnStart));
+      const alpha = warnT * warnT * 0.22;
       const vg = ctx.createRadialGradient(cw / 2, H / 2, Math.min(cw, H) * 0.18, cw / 2, H / 2, Math.max(cw, H) * 0.85);
       vg.addColorStop(0, 'rgba(255,20,20,0)');
-      vg.addColorStop(1, `rgba(255,20,20,${0.32 * pulse})`);
+      vg.addColorStop(1, `rgba(255,20,20,${alpha})`);
       ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, cw, H);
-      // thin overall tint so even the centre isn't clean white
-      ctx.fillStyle = `rgba(255,0,0,${0.06 * pulse})`;
       ctx.fillRect(0, 0, cw, H);
     }
 
@@ -233,7 +306,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     let bottomGlow = gradCacheRef.current[bgKey + '-bottom'];
     if (!bottomGlow) {
       bottomGlow = ctx.createRadialGradient(cw / 2, H, 0, cw / 2, H, cw * 0.9);
-      bottomGlow.addColorStop(0, 'rgba(123,47,255,0.2)');
+      bottomGlow.addColorStop(0, themeRef.current?.canvasBottomGlow ?? 'rgba(255,46,158,0.2)');
       bottomGlow.addColorStop(1, 'rgba(0,0,0,0)');
       gradCacheRef.current[bgKey + '-bottom'] = bottomGlow;
     }
@@ -259,53 +332,65 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       ctx.globalAlpha = 1;
     }
 
-    // ── Danger state (updated for audio side-effects) ─────────────────────────
-    const bodies = bodiesRef.current;
-    let minBodyTop = H;
-    for (const b of bodies) {
-      const top = b.position.y - FRUITS[b.fruitIdx].r;
-      if (top < minBodyTop) minBodyTop = top;
-    }
-    const isInDanger = minBodyTop < DANGER_Y && bodies.some(
-      b => b.speed < 2.0 && b.position.y - FRUITS[b.fruitIdx].r < DANGER_Y,
-    );
-    // Trigger/stop danger heartbeat audio
-    if (isInDanger && !isDangerRef.current) {
-      isDangerRef.current = true;
-      audioRef.current?.startDanger?.();
-    } else if (!isInDanger && isDangerRef.current) {
-      isDangerRef.current = false;
-      audioRef.current?.stopDanger?.();
-    }
-
-    const stackFill = Math.max(0, Math.min(1, (H - minBodyTop) / (H - DANGER_Y)));
-
-    // ── Danger line + badge ───────────────────────────────────────────────────
+    // ── Danger hazard-stripe barrier + badge ─────────────────────────────────
+    const bandH = isInDanger ? 12 : 10;
+    const bandTop = DANGER_Y - bandH / 2;
     ctx.save();
-    ctx.setLineDash([6, 8]);
-    ctx.strokeStyle = `rgba(255,59,59,${isInDanger ? 0.95 : 0.55})`;
-    ctx.lineWidth = isInDanger ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.rect(0, bandTop, cw, bandH);
+    ctx.clip();
+    ctx.fillStyle = isInDanger ? 'rgba(26,0,0,0.85)' : 'rgba(20,0,0,0.35)';
+    ctx.fillRect(0, bandTop, cw, bandH);
+    const stripeW = 12;
+    const scrollSpeed = isInDanger ? 0.045 : 0.012;
+    const scrollOffset = (now * scrollSpeed) % (stripeW * 2);
+    ctx.strokeStyle = isInDanger ? '#ff3b3b' : 'rgba(255,59,59,0.55)';
+    ctx.lineWidth = stripeW;
     if (isInDanger) { ctx.shadowBlur = 10; ctx.shadowColor = '#ff3b3b'; }
-    ctx.beginPath(); ctx.moveTo(8, DANGER_Y); ctx.lineTo(cw - 8, DANGER_Y); ctx.stroke();
+    for (let x = -bandH - stripeW * 2 + scrollOffset; x < cw + bandH; x += stripeW * 2) {
+      ctx.beginPath();
+      ctx.moveTo(x, bandTop + bandH);
+      ctx.lineTo(x + bandH + stripeW, bandTop);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = isInDanger ? '#ff3b3b' : 'rgba(255,59,59,0.8)';
+    ctx.lineWidth = isInDanger ? 2 : 1.2;
+    if (isInDanger) { ctx.shadowBlur = 12; ctx.shadowColor = '#ff3b3b'; }
+    ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(cw, DANGER_Y); ctx.stroke();
     ctx.shadowBlur = 0; ctx.restore();
 
     ctx.save();
-    ctx.font = 'bold 8px "Space Mono", monospace';
+    ctx.font = 'bold 10px "Space Mono", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const badgeLabel = '▲ DANGER ZONE';
+    const badgeLabel = 'DANGER ZONE';
     const bw = ctx.measureText(badgeLabel).width;
-    const bx = cw / 2, by = DANGER_Y - 11;
-    const bpx = 6, bpy = 3;
-    ctx.fillStyle = isInDanger ? '#ff3b3b' : 'rgba(255,59,59,0.18)';
-    if (isInDanger) { ctx.shadowBlur = 14; ctx.shadowColor = 'rgba(255,59,59,0.7)'; }
+    const bx = cw / 2, by = bandTop - 13;
+    const iconW = 14;
+    const bpx = 10, bpy = 5;
+    const pillW = bw + iconW + bpx * 2 + 4;
+    const pillH = (bpy + 4) * 2;
+    ctx.fillStyle = isInDanger ? '#ff3b3b' : 'rgba(30,0,0,0.9)';
+    ctx.strokeStyle = isInDanger ? '#fff' : 'rgba(255,59,59,0.7)';
+    ctx.lineWidth = 1.5;
+    if (isInDanger) { ctx.shadowBlur = 16; ctx.shadowColor = 'rgba(255,59,59,0.9)'; }
     ctx.beginPath();
-    ctx.roundRect(bx - bw / 2 - bpx, by - bpy - 2, bw + bpx * 2, (bpy + 2) * 2, 8);
-    ctx.fill(); ctx.shadowBlur = 0;
-    ctx.setLineDash([]);
-    ctx.strokeStyle = isInDanger ? 'rgba(255,59,59,0.9)' : 'rgba(255,59,59,0.45)';
-    ctx.lineWidth = 0.75; ctx.stroke();
-    ctx.fillStyle = isInDanger ? '#fff' : 'rgba(255,175,175,0.85)';
-    ctx.fillText(badgeLabel, bx, by);
+    ctx.roundRect(bx - pillW / 2, by - pillH / 2, pillW, pillH, pillH / 2);
+    ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+    // Warning triangle icon, left of the label
+    const triCx = bx - pillW / 2 + bpx + iconW / 2 - 2, triCy = by;
+    ctx.fillStyle = isInDanger ? '#fff' : '#ff3b3b';
+    ctx.beginPath();
+    ctx.moveTo(triCx, triCy - 5); ctx.lineTo(triCx + 5, triCy + 4); ctx.lineTo(triCx - 5, triCy + 4);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = isInDanger ? '#ff3b3b' : (isInDanger ? '#fff' : 'rgba(30,0,0,0.9)');
+    ctx.fillRect(triCx - 0.6, triCy - 2, 1.2, 3.6);
+    ctx.fillRect(triCx - 0.6, triCy + 2, 1.2, 1.2);
+    ctx.fillStyle = isInDanger ? '#fff' : 'rgba(255,180,180,0.95)';
+    ctx.fillText(badgeLabel, bx + iconW / 2, by);
     ctx.restore();
 
     // ── Drop indicator ───────────────────────────────────────────────────────
@@ -640,9 +725,90 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       }
     }
 
-    // ── Danger vignette ──────────────────────────────────────────────────────
+    // ── Collapse FX ──────────────────────────────────────────────────────────
+    // Deliberately red and inward-collapsing, so it never reads as a reward the
+    // way the gold outward bomb blast does.
+    if (collapseFXRef.current) {
+      const cAge = now - collapseFXRef.current.startedAt;
+      const cDur = 1100;
+      if (cAge < cDur) {
+        // Red flash across the whole vacuum
+        if (cAge < 200) {
+          ctx.save();
+          ctx.globalAlpha = Math.pow(1 - cAge / 200, 1.5) * 0.6;
+          ctx.fillStyle = '#ff2020';
+          ctx.fillRect(0, 0, cw, H);
+          ctx.restore();
+        }
+        // Imploding rings along the danger line
+        for (let i = 0; i < 2; i++) {
+          const delay = i * 120;
+          const rAge  = cAge - delay;
+          if (rAge < 0) continue;
+          const rT    = Math.min(1, rAge / 800);
+          const ringR = (1 - rT) * cw * 0.75; // collapses inward
+          ctx.save();
+          ctx.globalAlpha = Math.pow(1 - rT, 0.8) * 0.85;
+          ctx.strokeStyle = '#ff3b3b';
+          ctx.lineWidth   = 2 + (1 - rT) * 3;
+          ctx.shadowBlur  = 20; ctx.shadowColor = '#ff3b3b';
+          ctx.beginPath(); ctx.arc(cw / 2, DANGER_Y, Math.max(0, ringR), 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+        }
+        // Falling debris streaks
+        if (cAge < 700) {
+          const dT = cAge / 700;
+          for (let i = 0; i < 9; i++) {
+            const dx = ((i * 97) % cw);
+            const dy = DANGER_Y + dT * H * 0.55 + (i % 3) * 18;
+            ctx.save();
+            ctx.globalAlpha = Math.pow(1 - dT, 1.4) * 0.7;
+            ctx.fillStyle = i % 2 ? '#ff6b6b' : '#ffffff';
+            ctx.beginPath(); ctx.arc(dx, dy, 2.4 * (1 - dT * 0.6), 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          }
+        }
+        // Penalty label — names the cause AND the exact cost, because the
+        // player has to connect "I crossed the line" to "my clock got halved".
+        if (cAge > 100 && cAge < 1050) {
+          const lT = (cAge - 100) / 950;
+          const lost = collapseFXRef.current.lost ?? 0;
+          ctx.save();
+          ctx.globalAlpha = lT < 0.12 ? lT / 0.12 : lT > 0.72 ? 1 - (lT - 0.72) / 0.28 : 1;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const yTop = DANGER_Y + 50 - lT * 20;
+
+          ctx.font = 'bold 30px "Space Mono", monospace';
+          ctx.fillStyle = '#ff5555';
+          ctx.shadowBlur = 22; ctx.shadowColor = '#ff2020';
+          ctx.fillText('COLLAPSE', cw / 2, yTop);
+
+          ctx.font = 'bold 13px "Nunito", system-ui';
+          ctx.fillStyle = '#ffb3b3';
+          ctx.shadowBlur = 8;
+          ctx.fillText('top of stack vaporized', cw / 2, yTop + 24);
+
+          if (lost > 0) {
+            ctx.font = 'bold 34px "Space Mono", monospace';
+            ctx.fillStyle = '#ff3b3b';
+            ctx.shadowBlur = 26; ctx.shadowColor = '#ff2020';
+            ctx.fillText(`−${lost}s`, cw / 2, yTop + 58);
+
+            ctx.font = 'bold 12px "Nunito", system-ui';
+            ctx.fillStyle = '#ffd0d0';
+            ctx.shadowBlur = 6;
+            ctx.fillText('TIME HALVED', cw / 2, yTop + 82);
+          }
+          ctx.restore();
+        }
+      } else {
+        collapseFXRef.current = null;
+      }
+    }
+
+    // ── Danger vignette — gentle, slow pulse once actually over the line ─────
     if (isInDanger) {
-      const pulse = 0.22 + 0.14 * Math.sin(now / 340);
+      const pulse = 0.18 + 0.1 * Math.sin(now / 520);
       const dv = ctx.createRadialGradient(cw / 2, H / 2, H * 0.26, cw / 2, H / 2, H * 0.76);
       dv.addColorStop(0, 'rgba(0,0,0,0)');
       dv.addColorStop(1, `rgba(255,59,59,${pulse})`);
@@ -663,7 +829,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       const gg = ctx.createLinearGradient(0, gbot, 0, gbot - fh);
       if (isInDanger)           { gg.addColorStop(0, '#ff3b3b'); gg.addColorStop(1, '#ff8a8a'); }
       else if (stackFill > 0.6) { gg.addColorStop(0, '#ffd700'); gg.addColorStop(1, '#ff8a4a'); }
-      else                      { gg.addColorStop(0, '#00d4ff'); gg.addColorStop(1, '#7b2fff'); }
+      else                      { gg.addColorStop(0, themeRef.current?.secondary ?? '#00d4ff'); gg.addColorStop(1, themeRef.current?.primary ?? '#ff2e9e'); }
       ctx.fillStyle = gg;
       ctx.beginPath(); ctx.roundRect(gx - gaugeW / 2, gbot - fh, gaugeW, fh, 2); ctx.fill();
     }
@@ -672,42 +838,56 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     ctx.restore(); // end root save
   }, [getGrad]);
 
-  // ── Game-over detection ──────────────────────────────────────────────────────
-  const checkGameOver = useCallback(() => {
+  // ── Gravity Well Collapse ────────────────────────────────────────────────────
+  // Breaching the danger line used to end the run. It now costs time and clears
+  // the top of the stack instead, leaving the timer as the only fail state.
+  // That turns the line from a wall into a dial the player chooses to push.
+  const checkCollapse = useCallback(() => {
     if (gameOverRef.current) return;
-    const sinceLastDrop = Date.now() - lastDropTimeRef.current;
-    if (sinceLastDrop < 500) return; // short grace right after a drop
+    const now = Date.now();
+    if (now - lastDropTimeRef.current < 500) return;  // grace right after a drop
+    if (now < collapseImmuneUntil.current) return;    // debris still settling
 
-    // Any fruit whose TOP is above the danger line counts — no speed gate,
-    // so fast-moving fruits that overflow the bucket also trigger game over.
-    // The 500ms post-drop grace above and the 600ms confirmation below prevent
-    // false triggers from fruits that briefly bounce up after being dropped.
-    const inDanger = bodiesRef.current.some(
+    // Any planet whose TOP is above the line counts — no speed gate, so a
+    // fast body that overflows the vacuum trips it too. The post-drop grace
+    // above and the 600ms confirmation below reject momentary bounces.
+    const breaching = bodiesRef.current.some(
       b => b.position.y - FRUITS[b.fruitIdx].r < DANGER_Y,
     );
 
-    if (inDanger) {
-      if (gameOverPendingRef.current) return;
-      gameOverPendingRef.current = true;
-      // Confirm after 600ms — fruit must still be above the line
-      setTimeout(() => {
-        if (gameOverRef.current) return;
-        const still = bodiesRef.current.some(
-          b2 => b2.position.y - FRUITS[b2.fruitIdx].r < DANGER_Y,
-        );
-        if (still) {
-          gameOverRef.current = true;
-          setGameOver(true);
-          cancelAnimationFrame(gameLoopRef.current);
-          audioRef.current?.stopDanger?.();
-          audioRef.current?.playGameOver?.();
-        } else {
-          gameOverPendingRef.current = false;
-        }
-      }, 600);
-    } else {
-      gameOverPendingRef.current = false;
-    }
+    if (!breaching) { collapsePendingRef.current = false; return; }
+    if (collapsePendingRef.current) return;
+    collapsePendingRef.current = true;
+
+    setTimeout(() => {
+      if (gameOverRef.current) return;
+      const still = bodiesRef.current.some(
+        b2 => b2.position.y - FRUITS[b2.fruitIdx].r < DANGER_Y,
+      );
+      collapsePendingRef.current = false;
+      if (!still) return;
+
+      // Vaporize the topmost planets to buy the player room back
+      const sorted = [...bodiesRef.current].sort((a, b) => a.position.y - b.position.y);
+      const kill   = sorted.slice(0, Math.min(COLLAPSE_VAPORIZE, sorted.length));
+      kill.forEach(t => World.remove(worldRef.current, t));
+      bodiesRef.current = bodiesRef.current.filter(b => !kill.includes(b));
+
+      collapseCountRef.current += 1;
+      collapseImmuneUntil.current = Date.now() + COLLAPSE_IMMUNITY;
+
+      // The run continues — the cost is on the clock, not the board. The
+      // handler halves the remaining time and reports how much it took so the
+      // FX and the HUD can name the exact number.
+      const lost = onCollapseRef.current?.() ?? 0;
+      if (lost > 0) setTimeDelta({ amount: -lost, key: Date.now() });
+
+      collapseFXRef.current = { startedAt: Date.now(), lost };
+      shakeFXRef.current    = { startedAt: Date.now(), intensity: 11, duration: 600 };
+      haptic([60, 30, 90]);
+      audioRef.current?.stopDanger?.();
+      audioRef.current?.playCollapse?.();
+    }, 600);
   }, []);
 
   // ── Merge collision handler ─────────────────────────────────────────────────
@@ -747,27 +927,44 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
 
         const newIdx = idx + 1;
 
-        // Chain combo detection
+        // ── Chain combo detection ──────────────────────────────────────────
+        // The window widens with each link so a long chain stays reachable
+        // once the player has committed to setting one up.
         const now2 = Date.now();
-        if (now2 - lastMergeTimeRef.current < CHAIN_WINDOW) {
+        const window = Math.min(
+          CHAIN_WINDOW + chainCountRef.current * CHAIN_EXTEND,
+          CHAIN_WINDOW_MAX,
+        );
+        if (now2 - lastMergeTimeRef.current < window) {
           chainCountRef.current = Math.min(chainCountRef.current + 1, CHAIN_MAX);
         } else {
           chainCountRef.current = 1;
         }
         lastMergeTimeRef.current = now2;
-        mergeCountRef.current += 1;
-        const multiplier = 1 + (chainCountRef.current - 1) * 0.5;
+        chainExpiresRef.current  = now2 + window;
+        mergeCountRef.current   += 1;
+        if (chainCountRef.current > maxChainRef.current) maxChainRef.current = chainCountRef.current;
+        mergesByStageRef.current[newIdx + 1] = (mergesByStageRef.current[newIdx + 1] ?? 0) + 1;
+        setChain({ count: chainCountRef.current, expiresAt: chainExpiresRef.current, key: now2 });
+
+        const multiplier = 1 + (chainCountRef.current - 1) * CHAIN_SLOPE;
         const rawPts     = FRUITS[newIdx].pts;
         const finalPts   = Math.round(rawPts * multiplier);
 
         addFruitBody(mx, my, newIdx);
         onScoreRef.current?.(finalPts);
-        audioRef.current?.playMerge?.(newIdx);
+        audioRef.current?.playMerge?.(newIdx, chainCountRef.current);
+        onMergeRef.current?.(newIdx + 1, chainCountRef.current);
 
         const bonus = mergeTimeBonus(newIdx);
-        onAddTimeRef.current?.(bonus);
+        if (bonus > 0) {
+          onAddTimeRef.current?.(bonus);
+          setTimeDelta({ amount: bonus, key: now2 }); // small pulse beside the clock
+        }
 
-        const chainLabel = chainCountRef.current > 1 ? ` ×${chainCountRef.current.toFixed(1)}` : '';
+        // Show the score *multiplier*, matching the HUD chain meter — printing
+        // the raw link count here read as a second, contradictory "×" number.
+        const chainLabel = chainCountRef.current > 1 ? ` ×${multiplier.toFixed(1)}` : '';
         onToastRef.current?.(`${FRUITS[newIdx].name}  +${finalPts}pts${chainLabel}  +${bonus}s`);
 
         mergeBurstsRef.current.push({
@@ -803,7 +1000,9 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
   // ── Physics init ────────────────────────────────────────────────────────────
   const initPhysics = useCallback(() => {
     const cw     = containerWRef.current;
-    const engine = Engine.create({ gravity: { y: 38 } });
+    // Lower gravity than the original 38 — planets now fall, roll and settle
+    // instead of slamming, which is what lets unplanned cascades happen.
+    const engine = Engine.create({ gravity: { y: 24 } });
     const world  = engine.world;
     engineRef.current = engine;
     worldRef.current  = world;
@@ -833,7 +1032,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       for (let i = 0; i < SUB; i++) Engine.update(engineRef.current, stepMs);
 
       render(dt);
-      checkGameOver();
+      checkCollapse();
       gameLoopRef.current = requestAnimationFrame(tick);
     };
     tickRef.current     = tick;
@@ -850,7 +1049,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
       }
     };
     document.addEventListener('visibilitychange', visHandlerRef.current);
-  }, [render, checkGameOver]);
+  }, [render, checkCollapse]);
 
   // ── Public API ──────────────────────────────────────────────────────────────
   const startEngine = useCallback((dims) => {
@@ -877,23 +1076,36 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     landingFXRef.current.clear();
     shakeFXRef.current        = null;
     bombFXRef.current         = null;
+    collapseFXRef.current     = null;
     expandFXRef.current       = null;
     wallGlowRef.current       = null;
     timeFXRef.current         = null;
     readyFlashRef.current     = null;
     gameOverRef.current       = false;
-    gameOverPendingRef.current= false;
+    collapsePendingRef.current  = false;
+    collapseImmuneUntil.current = 0;
     isDangerRef.current       = false;
     canDropRef.current        = true;
+    canHoldRef.current        = true;
+    holdIdxRef.current        = null;
     chainCountRef.current     = 0;
     lastMergeTimeRef.current  = 0;
+    chainExpiresRef.current   = 0;
     mergeCountRef.current     = 0;
+    maxChainRef.current       = 0;
+    collapseCountRef.current  = 0;
+    mergesByStageRef.current  = {};
     lastDropTimeRef.current   = 0;
     containerWRef.current     = initialW;
     dropXRef.current          = initialW / 2;
     dropXTargetRef.current    = initialW / 2;
     ctxRef.current            = null;
     gradCacheRef.current      = {};
+    setHoldIdx(null);
+    setCanHold(true);
+    setChain({ count: 0, expiresAt: 0, key: 0 });
+    setTimeDelta(null);
+    resetBag(); // each run draws an independent spawn sequence
 
     vacuumStarsRef.current = Array.from({ length: 38 }, () => ({
       x:     Math.random() * initialW,
@@ -953,12 +1165,55 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     setNextIdx(nextNext);
     setNextNextIdx(newNN);
 
+    // A drop re-arms the hold slot — one bank/swap per placement.
+    canHoldRef.current = true;
+    setCanHold(true);
+
     setTimeout(() => {
       canDropRef.current    = true;
       readyFlashRef.current = { startedAt: Date.now() };
       audioRef.current?.playReady?.();
     }, DROP_COOLDOWN);
   }, [addFruitBody]);
+
+  // ── Hold slot ────────────────────────────────────────────────────────────────
+  // Bank the current planet for later, or swap it with whatever is banked.
+  // This is the main source of *decision* in the game: an unusable planet stops
+  // being a punishment and becomes a resource you choose when to spend.
+  const swapHold = useCallback(() => {
+    if (!canHoldRef.current || gameOverRef.current) return;
+
+    if (holdIdxRef.current === null) {
+      // Bank current, pull the queue forward
+      holdIdxRef.current     = currentIdxRef.current;
+      const next             = nextIdxRef.current;
+      const nextNext         = nextNextIdxRef.current;
+      const newNN            = randFruitIdx();
+      currentIdxRef.current  = next;
+      nextIdxRef.current     = nextNext;
+      nextNextIdxRef.current = newNN;
+      setCurrentIdx(next);
+      setNextIdx(nextNext);
+      setNextNextIdx(newNN);
+    } else {
+      const banked          = holdIdxRef.current;
+      holdIdxRef.current    = currentIdxRef.current;
+      currentIdxRef.current = banked;
+      setCurrentIdx(banked);
+    }
+
+    setHoldIdx(holdIdxRef.current);
+    canHoldRef.current = false;
+    setCanHold(false);
+
+    // Re-clamp the ghost — the swapped-in planet may have a different radius
+    const r  = FRUITS[currentIdxRef.current].r;
+    const cw = containerWRef.current;
+    dropXTargetRef.current = Math.max(r, Math.min(cw - r, dropXTargetRef.current));
+
+    haptic(12);
+    audioRef.current?.playReady?.();
+  }, []);
 
   const movePointer = useCallback((rawX) => {
     if (gameOverRef.current) return;
@@ -1061,10 +1316,15 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     currentIdx,
     nextIdx,
     nextNextIdx,
+    holdIdx,
+    canHold,
+    chain,
+    timeDelta,
     gameOver,
     containerWidth,
     startEngine,
     dropFruit,
+    swapHold,
     movePointer,
     stopEngine,
     pauseEngine,
@@ -1073,5 +1333,12 @@ export function useGame(onScorePts, onToast, onAddTime, audio) {
     expandContainer,
     triggerTimeFX,
     getMergeCount: () => mergeCountRef.current,
+    // Full run stats for the progression layer (codex, challenges, XP)
+    getRunStats: () => ({
+      merges:        mergeCountRef.current,
+      maxChain:      maxChainRef.current,
+      collapses:     collapseCountRef.current,
+      mergesByStage: { ...mergesByStageRef.current },
+    }),
   };
 }
