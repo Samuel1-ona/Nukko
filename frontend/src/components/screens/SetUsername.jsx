@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import Spinner          from '../ui/Spinner.jsx';
+import { CheckIcon, CloseIcon } from '../ui/Icons.jsx';
+import { PrimaryButton, GhostButton } from '../ui/kit.jsx';
+import { INK, DIM, FAINT, RULE, DISPLAY, BODY } from '../../theme/tokens.js';
 import { useUsername }  from '../../hooks/useUsername.js';
 import { useTheme }     from '../../theme/ThemeContext.jsx';
 
@@ -28,10 +31,10 @@ export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }
 
   const borderColor = available === true && valid ? 'rgba(0,230,118,0.6)'
     : available === false ? 'rgba(255,59,59,0.6)'
-    : 'rgba(255,255,255,0.18)';
+    : RULE;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
+    <div style={{ position: 'absolute', inset: 0, background: theme.bgGradient }}>
       <CosmicBackground intensity="medium" dimmed>
         <div style={{
           height: '100%', display: 'flex', flexDirection: 'column',
@@ -40,12 +43,11 @@ export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }
           {/* Heading */}
           <div>
             <div style={{
-              fontFamily: '"Fredoka", "Nunito", sans-serif', fontWeight: 600,
-              fontSize: 28, color: '#fff', lineHeight: 1.15,
+              fontFamily: DISPLAY, fontWeight: 600,
+              fontSize: 28, color: INK, lineHeight: 1.15,
             }}>What's your<br />cosmic name?</div>
             <div style={{
-              marginTop: 10, fontFamily: '"Nunito", system-ui', fontSize: 14,
-              color: 'rgba(255,255,255,0.6)',
+              marginTop: 10, fontFamily: BODY, fontSize: 14, color: DIM,
             }}>You can change this once every 7 days.</div>
           </div>
 
@@ -89,8 +91,9 @@ export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }
                   <div style={{
                     width: 18, height: 18, borderRadius: 99, background: '#00e676',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, color: '#06210f',
-                  }}>✓</div>
+                  }}>
+                    <CheckIcon size={11} color="#06210f" strokeWidth={3.2} />
+                  </div>
                   <span style={{ color: '#00e676' }}>Cosmic name is yours!</span>
                 </>
               )}
@@ -99,16 +102,16 @@ export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }
                   <div style={{
                     width: 18, height: 18, borderRadius: 99, background: '#ff3b3b',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, color: '#fff',
-                  }}>✕</div>
+                  }}>
+                    <CloseIcon size={10} color="#fff" strokeWidth={3} />
+                  </div>
                   <span style={{ color: '#ff3b3b' }}>Name already claimed</span>
                 </>
               )}
             </div>
 
             <div style={{
-              marginTop: 6, fontFamily: '"Nunito", system-ui', fontSize: 12,
-              color: 'rgba(255,255,255,0.35)',
+              marginTop: 6, fontFamily: BODY, fontSize: 12, color: FAINT,
             }}>
               Letters, numbers, underscores only · {value.length}/20
             </div>
@@ -121,30 +124,12 @@ export default function SetUsername({ onSubmit, onSkip, checkUsernameAvailable }
             <Spinner text="Saving username on Celo…" />
           ) : (
             <div>
-              <button onClick={handleSubmit} disabled={!canSubmit} style={{
-                width: '100%', height: 56, borderRadius: 16,
-                background: canSubmit
-                  ? theme.gradient
-                  : 'rgba(255,255,255,0.08)',
-                border: 'none', color: canSubmit ? '#fff' : 'rgba(255,255,255,0.35)',
-                fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 17,
-                cursor: canSubmit ? 'pointer' : 'not-allowed',
-                boxShadow: canSubmit
-                  ? `0 10px 30px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`
-                  : 'none',
-                transition: 'background .2s ease',
-              }}>
+              <PrimaryButton onClick={handleSubmit} disabled={!canSubmit}>
                 Set Name
-              </button>
-
-              <button onClick={onSkip} style={{
-                width: '100%', marginTop: 14, padding: '12px', background: 'transparent',
-                border: 'none', color: 'rgba(255,255,255,0.55)',
-                fontFamily: '"Nunito", system-ui', fontSize: 14,
-                cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 4,
-              }}>
+              </PrimaryButton>
+              <GhostButton onClick={onSkip} height={40} style={{ marginTop: 10, border: 'none', color: FAINT }}>
                 Skip for now
-              </button>
+              </GhostButton>
             </div>
           )}
         </div>

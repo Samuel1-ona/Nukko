@@ -1,5 +1,7 @@
 import { STABLECOIN_KEYS, STABLECOINS } from '../../blockchain/tokens.js';
 import { BombIcon, ExpandIcon } from './Icons.jsx';
+import { Modal, ModalTitle, TokenTabs, PackageButton, PrimaryButton, GhostButton } from './kit.jsx';
+import { DIM, FAINT, RULE, GOLD, BODY } from '../../theme/tokens.js';
 
 function fmtBalance(raw, decimals) {
   const val = Number(raw ?? 0n) / 10 ** decimals;
@@ -9,144 +11,90 @@ function fmtBalance(raw, decimals) {
 const TIER_LABELS = ['Starter', 'Pro', 'Max'];
 
 export default function PowerUpShop({
-  type,
-  packages,
-  selectedToken,
-  onSelectToken,
-  onPurchase,
-  loading,
-  onClose,
-  balances = {},
-  count = 0,
-  onUse,
+  type, packages, selectedToken, onSelectToken, onPurchase,
+  loading, onClose, balances = {}, count = 0, onUse,
 }) {
   const isBomb  = type === 'bomb';
-  const label   = isBomb ? 'Bombs'  : 'Expands';
-  const unitLbl = isBomb ? 'bomb'   : 'expand';
-  const color   = isBomb ? '#ffd700' : '#00d4ff';
+  const label   = isBomb ? 'Bombs' : 'Expands';
+  const unitLbl = isBomb ? 'bomb'  : 'expand';
+  const color   = isBomb ? GOLD : '#00d4ff';
 
   const effectDesc = isBomb
     ? 'Vaporizes planets near the danger line. A gold shockwave detonates across the field and you pocket a flat +200 pts.'
     : 'Fires a cyan energy beam across the field and stretches both walls outward. Cyan wall glow persists for ~4 seconds.';
 
+  const tokens = STABLECOIN_KEYS.map(key => ({
+    key, label: key, sub: fmtBalance(balances[key], STABLECOINS[key].decimals),
+  }));
+
   return (
-    <div className="shop-overlay" onClick={onClose}>
-      <div className="shop-modal" onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} align="bottom">
+      <div style={{ padding: '10px 20px 30px' }}>
+        <div style={{
+          width: 38, height: 4, borderRadius: 2, background: RULE, margin: '0 auto 18px',
+        }} />
 
-        {/* Title */}
-        <h3 style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          color,
-        }}>
-          {isBomb
-            ? <BombIcon size={20} color={color} />
-            : <ExpandIcon size={20} color={color} />
-          }
-          {label}
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, marginBottom: 8 }}>
+          {isBomb ? <BombIcon size={18} color={color} /> : <ExpandIcon size={18} color={color} />}
+          <ModalTitle>{label}</ModalTitle>
+        </div>
 
-        {/* Effect description */}
         <p style={{
-          fontFamily: '"Nunito", system-ui', fontSize: 11, fontStyle: 'italic',
-          color: 'rgba(255,255,255,0.38)', textAlign: 'center',
-          margin: '-4px 0 0', lineHeight: 1.55,
+          fontFamily: BODY, fontSize: 11.5, color: FAINT,
+          textAlign: 'center', lineHeight: 1.55, margin: 0,
         }}>
           {effectDesc}
         </p>
 
-        {/* Stock status + use-one action */}
+        {/* Stock and the immediate action, if any is held */}
         {count > 0 ? (
-          <div>
-            <div style={{
-              fontFamily: '"Nunito", system-ui', fontSize: 12,
-              color: `${color}cc`, textAlign: 'center', marginBottom: 8,
-              fontWeight: 700,
-            }}>
-              {count} {unitLbl}{count !== 1 ? 's' : ''} in stock
-            </div>
-            <button
-              onClick={() => { onUse?.(); onClose(); }}
-              disabled={loading}
-              style={{
-                width: '100%', padding: '12px 0', borderRadius: 14,
-                background: `linear-gradient(135deg, ${color}28, ${color}0f)`,
-                border: `1.5px solid ${color}88`,
-                color, fontFamily: '"Nunito", system-ui',
-                fontWeight: 800, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.5 : 1, letterSpacing: '0.04em',
-                transition: 'opacity .15s ease, transform .1s ease',
-              }}
-            >
+          <div style={{ marginTop: 18 }}>
+            <PrimaryButton onClick={() => { onUse?.(); onClose(); }} disabled={loading} height={48}>
               Use one now
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 0' }}>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-              <span style={{ fontFamily: '"Nunito", system-ui', fontSize: 11, color: 'rgba(255,255,255,0.32)' }}>
-                or buy more
+            </PrimaryButton>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 16 }}>
+              <div style={{ flex: 1, height: 1, background: RULE }} />
+              <span style={{
+                fontFamily: BODY, fontSize: 9, fontWeight: 800, letterSpacing: '0.18em',
+                textTransform: 'uppercase', color: FAINT,
+              }}>
+                {count} in stock · or buy more
               </span>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+              <div style={{ flex: 1, height: 1, background: RULE }} />
             </div>
           </div>
         ) : (
           <div style={{
-            padding: '8px 12px', borderRadius: 10,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            fontFamily: '"Nunito", system-ui', fontSize: 12,
-            color: 'rgba(255,255,255,0.4)', textAlign: 'center',
+            marginTop: 18, paddingTop: 14, borderTop: `1px solid ${RULE}`,
+            fontFamily: BODY, fontSize: 12, color: DIM, textAlign: 'center',
           }}>
-            No {unitLbl}s remaining — get some below
+            No {unitLbl}s left — pick a pack below.
           </div>
         )}
 
-        {/* Token selector */}
-        <div className="token-tabs">
-          {STABLECOIN_KEYS.map((key) => (
-            <button
-              key={key}
-              className={`token-tab ${selectedToken === key ? 'active' : ''}`}
-              onClick={() => onSelectToken(key)}
-              disabled={loading}
-            >
-              <span>{key}</span>
-              <span className="token-bal">{fmtBalance(balances[key], STABLECOINS[key].decimals)}</span>
-            </button>
-          ))}
+        <div style={{ marginTop: 18 }}>
+          <TokenTabs items={tokens} selected={selectedToken} onSelect={onSelectToken} disabled={loading} />
         </div>
 
-        {/* Packages */}
-        <div className="shop-packages">
+        <div style={{ display: 'flex', gap: 9, marginTop: 14 }}>
           {packages.map((pkg, i) => (
-            <button
+            <PackageButton
               key={i}
-              className="pkg-btn"
+              title={`${pkg.qty} ${unitLbl}${pkg.qty > 1 ? 's' : ''}`}
+              tier={TIER_LABELS[i] ?? ''}
+              price={`$${pkg.priceUSD} ${selectedToken}`}
+              accent={color}
+              highlight={i === 1}
               onClick={() => onPurchase(i)}
               disabled={loading}
-              style={i === 1 ? {
-                background: `linear-gradient(145deg, ${color}20, ${color}0a)`,
-                borderColor: `${color}55`,
-              } : {}}
-            >
-              <span className="pkg-qty" style={{ color }}>
-                {pkg.qty} {unitLbl}{pkg.qty > 1 ? 's' : ''}
-              </span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 'auto' }}>
-                <span style={{
-                  fontFamily: '"Nunito", system-ui', fontSize: 9,
-                  color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em',
-                }}>
-                  {TIER_LABELS[i] ?? ''}
-                </span>
-                <span className="pkg-price">${pkg.priceUSD} {selectedToken}</span>
-              </div>
-            </button>
+            />
           ))}
         </div>
 
-        <button className="shop-close-btn" onClick={onClose} disabled={loading}>
+        <GhostButton onClick={loading ? undefined : onClose} height={42} style={{ marginTop: 14 }}>
           Close
-        </button>
+        </GhostButton>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import NukkoMascot      from '../ui/NukkoMascot.jsx';
 import NukkoWordmark    from '../ui/NukkoWordmark.jsx';
+import { ArrowRightIcon } from '../ui/Icons.jsx';
 import { useTheme }     from '../../theme/ThemeContext.jsx';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ function LoadingDots() {
 
 // ── Main screen ────────────────────────────────────────────────────────────
 
-export default function WalletConnect({ address, onConnect, onConnectSocial, socialLoading, isMiniPay, error, onPlayAsGuest }) {
+export default function WalletConnect({ address, onConnect, onConnectSocial, socialLoading, isMiniPay, error, onRetry, onPlayAsGuest }) {
   const { theme } = useTheme();
   const [open,          setOpen]          = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
@@ -163,6 +164,21 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                 color: '#ff8a8a', textAlign: 'center',
               }}>
                 {error}
+                {onRetry && (
+                  <button
+                    onClick={onRetry}
+                    style={{
+                      display: 'block', width: '100%', marginTop: 10,
+                      padding: '9px 0', borderRadius: 10,
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.22)',
+                      fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 13,
+                      color: '#fff', cursor: 'pointer',
+                    }}
+                  >
+                    Try again
+                  </button>
+                )}
               </div>
             )}
 
@@ -178,9 +194,10 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                   marginBottom: 14, fontFamily: '"Nunito", system-ui',
                   fontSize: 14, color: 'rgba(255,255,255,0.7)',
                 }}>
-                  Connecting MiniPay wallet…
+                  {onRetry ? 'Could not finish signing in.' : 'Connecting MiniPay wallet…'}
                 </div>
-                <LoadingDots />
+                {/* Without this the panel spins forever on any failed read. */}
+                {!onRetry && <LoadingDots />}
               </div>
             ) : (
               /* Dropdown anchor */
@@ -346,7 +363,10 @@ export default function WalletConnect({ address, onConnect, onConnectSocial, soc
                   transition: 'color 0.15s',
                 }}
               >
-                Try it first — 25-second free trial →
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  Try it first — 25-second free trial
+                  <ArrowRightIcon size={13} color="currentColor" />
+                </span>
               </button>
             )}
 

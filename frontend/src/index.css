@@ -110,161 +110,6 @@ button { font-family: inherit; cursor: pointer; }
 }
 .session-badge--red .session-dot { background: #ff4646; }
 
-/* Time packages */
-.time-packages-wrap { width: 100%; max-width: 360px; padding: 0 12px; }
-
-.token-tab:disabled { opacity: 0.4; cursor: not-allowed; }
-.token-tab { flex-direction: column; }
-.token-bal { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 1px; }
-.token-tab.active .token-bal { color: rgba(255,215,0,0.65); }
-
-.time-packages {
-  display: flex; gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.pkg-btn:active  { transform: scale(0.96); background: rgba(255,215,0,0.15); }
-.pkg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.pkg-time  { font-size: 15px; font-weight: 700; color: #ffd700; }
-.pkg-price { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 2px; }
-
-.play-hint { font-size: 11px; color: rgba(255,255,255,0.35); }
-
-/* ── Power-up bar ──────────────────────────────────────────────────────────── */
-.powerup-bar {
-  display: flex; align-items: center; justify-content: center;
-  gap: 16px; width: 100%; max-width: 360px; padding: 0 12px;
-}
-
-.powerup-item {
-  display: flex; align-items: center; gap: 6px;
-}
-
-.powerup-use-btn {
-  display: flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,0.08);
-  border: 1.5px solid rgba(255,215,0,0.35);
-  border-radius: 12px; padding: 8px 14px;
-  font-size: 18px; color: #fff; cursor: pointer;
-  transition: background 0.1s, transform 0.1s;
-}
-.powerup-use-btn span { font-size: 13px; font-weight: 700; color: #ffd700; }
-.powerup-use-btn:active { transform: scale(0.95); background: rgba(255,215,0,0.15); }
-.powerup-use-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.powerup-buy-btn {
-  background: rgba(255,215,0,0.15);
-  border: 1.5px solid rgba(255,215,0,0.5);
-  border-radius: 8px; width: 28px; height: 28px;
-  font-size: 16px; font-weight: 700; color: #ffd700;
-  cursor: pointer; transition: background 0.1s;
-  display: flex; align-items: center; justify-content: center;
-}
-.powerup-buy-btn:active { background: rgba(255,215,0,0.3); }
-.powerup-buy-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.powerup-divider {
-  width: 1px; height: 36px;
-  background: rgba(255,255,255,0.15);
-}
-
-/* ── Power-up shop modal ───────────────────────────────────────────────────── */
-.shop-overlay {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(0,0,0,0.72);
-  display: flex; align-items: flex-end; justify-content: center;
-  animation: nukko-fade-in .2s ease-out;
-}
-
-.shop-modal {
-  width: 100%; max-width: 430px;
-  background: linear-gradient(175deg, #1e0d38 0%, #120828 100%);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-bottom: none;
-  border-radius: 24px 24px 0 0;
-  padding: 12px 20px 36px;
-  display: flex; flex-direction: column; gap: 14px;
-  animation: nukko-slide-up .28s cubic-bezier(.22,1,.36,1);
-}
-
-.shop-modal h3 {
-  font-size: 18px; font-weight: 800; text-align: center;
-  color: #fff;
-  margin: 0;
-}
-
-/* Modal drag handle */
-.shop-modal::before {
-  content: '';
-  display: block;
-  width: 40px; height: 4px;
-  border-radius: 2px;
-  background: rgba(255,255,255,0.18);
-  margin: 0 auto 16px;
-}
-
-/* Token tabs row */
-.token-tabs {
-  display: flex; gap: 8px; justify-content: center;
-}
-
-.token-tab {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 2px; padding: 6px 14px; border-radius: 99px;
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.45);
-  font-family: 'Nunito', system-ui; font-size: 12px; font-weight: 700;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, color .15s ease;
-}
-.token-tab.active {
-  background: rgba(0,212,255,0.12);
-  border-color: rgba(0,212,255,0.5);
-  color: #00d4ff;
-}
-.token-tab:disabled { opacity: 0.4; cursor: not-allowed; }
-.token-bal { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 400; margin-top: 1px; }
-.token-tab.active .token-bal { color: rgba(255,215,0,0.65); }
-
-/* Package buttons in shop */
-.shop-packages {
-  display: flex; gap: 10px;
-}
-
-.pkg-btn {
-  flex: 1;
-  display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
-  gap: 6px;
-  padding: 14px 12px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, transform .1s ease;
-  min-height: 76px;
-  color: #fff;
-}
-.pkg-btn:hover  { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.2); }
-.pkg-btn:active { transform: scale(0.96); background: rgba(255,215,0,0.1); }
-.pkg-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-.pkg-qty  { font-size: 15px; font-weight: 800; color: #fff; font-family: 'Space Mono', monospace; }
-.pkg-price {
-  font-size: 11px; color: rgba(255,255,255,0.5);
-  font-family: 'Nunito', system-ui; font-weight: 600;
-}
-
-.shop-close-btn {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 12px; padding: 10px;
-  font-size: 13px; color: rgba(255,255,255,0.6);
-  cursor: pointer; margin-top: 4px;
-}
-.shop-close-btn:active { background: rgba(255,255,255,0.14); }
-
 /* Toast */
 .toast {
   position: absolute; top: 50%; left: 50%;
@@ -378,4 +223,71 @@ button { font-family: inherit; cursor: pointer; }
   cursor: none;
   touch-action: none;
   border-radius: 0 0 22px 22px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Orrery home screen — motion primitives
+   Every animation below drives transform/opacity only, so the whole
+   home screen composites on the GPU and stays smooth on cheap Androids.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Orbital rotor and its counter-rotation. A satellite riding the rotor
+   spins backwards at the same rate, which keeps the planet upright while
+   it travels the ellipse. */
+@keyframes nk-spin      { from { transform: rotate(0deg);   } to { transform: rotate(360deg);  } }
+@keyframes nk-spin-rev  { from { transform: rotate(0deg);   } to { transform: rotate(-360deg); } }
+
+/* Central body: a slow swell, not a pulse. */
+@keyframes nk-breathe   { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes nk-halo      { 0%, 100% { opacity: 0.45; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.09); } }
+
+/* Parallax star layers — near layer travels further than the far one. */
+@keyframes nk-drift-far  { from { transform: translate3d(0, 0, 0);      } to { transform: translate3d(-10px,  6px, 0); } }
+@keyframes nk-drift-mid  { from { transform: translate3d(0, 0, 0);      } to { transform: translate3d( 18px, -11px, 0); } }
+@keyframes nk-drift-near { from { transform: translate3d(0, 0, 0);      } to { transform: translate3d(-30px, 17px, 0); } }
+
+/* Nebula wash, slow enough to read as depth rather than movement. */
+@keyframes nk-nebula     { 0%, 100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(3%, -2%, 0) scale(1.12); } }
+
+/* A comet crosses every so often; mostly it is simply not there. */
+@keyframes nk-comet {
+  0%, 88%  { opacity: 0; transform: translate3d(0, 0, 0) rotate(30deg); }
+  90%      { opacity: 0.9; }
+  100%     { opacity: 0; transform: translate3d(78vw, 46vh, 0) rotate(30deg); }
+}
+
+/* Entrance choreography — one orchestrated load, staggered by depth. */
+@keyframes nk-rise {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes nk-scale-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.nk-rise {
+  opacity: 0;
+  animation: nk-rise 620ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Light travelling across the launch control. */
+@keyframes nk-sweep {
+  0%, 62%, 100% { transform: translate3d(-140%, 0, 0) skewX(-18deg); }
+  84%           { transform: translate3d( 340%, 0, 0) skewX(-18deg); }
+}
+
+/* Streak flame and reward chip want attention without shouting. */
+@keyframes nk-flicker { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; } }
+
+/* Pressable surfaces: the whole home screen should feel physical. */
+.nk-press { transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background-color 140ms ease, border-color 140ms ease; }
+.nk-press:active { transform: scale(0.975); }
+.nk-press-sm:active { transform: scale(0.94); }
+
+/* Honour the OS setting: everything above collapses to a static screen. */
+@media (prefers-reduced-motion: reduce) {
+  .nk-rise { opacity: 1; animation: none; }
+  .nk-motion,
+  .nk-motion * { animation: none !important; }
+  .nk-press, .nk-press-sm { transition: none; }
 }

@@ -1,111 +1,87 @@
 import { BombIcon, ExpandIcon, ClockIcon } from './Icons.jsx';
+import { HudPanel } from './kit.jsx';
+import { FAINT, RULE, BODY, NUM } from '../../theme/tokens.js';
 
-function PowerItem({ icon, label, count, hasCount, color, onClick, disabled }) {
+/**
+ * One power-up bay. The count is the loaded magazine and the "+" is restock —
+ * both live on the same tile because during a run the player has no attention
+ * to spare for a separate shop affordance.
+ */
+function PowerBay({ icon, label, count, hasCount, color, onClick, disabled }) {
   const hasStock = hasCount && count > 0;
 
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        flex: 1,
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        padding: '16px 6px 10px',
-        minHeight: 76,
-        background: hasStock
-          ? `linear-gradient(160deg, ${color}1c 0%, ${color}06 100%)`
-          : 'rgba(255,255,255,0.04)',
-        border: `1px solid ${hasStock ? color + '44' : 'rgba(255,255,255,0.08)'}`,
-        borderRadius: 18,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.4 : 1,
-        transition: 'border-color 0.2s ease, background 0.2s ease',
-        WebkitTapHighlightColor: 'transparent',
-        outline: 'none',
-      }}
+    <HudPanel
+      onClick={disabled ? undefined : onClick}
+      notch={10}
+      accent={hasStock ? `${color}66` : RULE}
+      style={{ flex: 1, opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+      innerStyle={{ position: 'relative', minHeight: 74 }}
     >
-      {/* Count badge — top-left, only when stock > 0 */}
-      {hasCount && count > 0 && (
+      <div style={{
+        height: '100%', minHeight: 74,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 7, padding: '16px 6px 10px',
+      }}>
+        {icon}
         <div style={{
-          position: 'absolute',
-          top: 7, left: 8,
-          minWidth: 20, height: 20,
-          borderRadius: '50%',
-          background: color,
-          boxShadow: `0 0 10px ${color}90`,
+          fontFamily: BODY, fontSize: 8.5, fontWeight: 800,
+          color: hasStock ? color : FAINT,
+          textTransform: 'uppercase', letterSpacing: '0.16em', lineHeight: 1,
+        }}>
+          {label}
+        </div>
+      </div>
+
+      {/* Loaded count */}
+      {hasStock && (
+        <div style={{
+          position: 'absolute', top: 6, left: 8,
+          minWidth: 19, height: 19, borderRadius: 6, padding: '0 4px',
+          background: color, boxShadow: `0 0 10px ${color}80`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: '"Space Mono", monospace',
-          fontSize: 10, fontWeight: 800, lineHeight: 1,
+          fontFamily: NUM, fontSize: 10, fontWeight: 700, lineHeight: 1,
           color: '#08010f',
         }}>
           {count}
         </div>
       )}
 
-      {/* Buy "+" — top-right, always visible */}
+      {/* Restock */}
       <div style={{
-        position: 'absolute',
-        top: 7, right: 8,
-        width: 18, height: 18,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.1)',
-        border: '1px solid rgba(255,255,255,0.15)',
+        position: 'absolute', top: 7, right: 9,
+        width: 15, height: 15, borderRadius: 4,
+        border: `1px solid ${RULE}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 12, fontWeight: 700, lineHeight: 1,
-        color: 'rgba(255,255,255,0.5)',
-        fontFamily: 'system-ui',
       }}>
-        +
+        <svg width="7" height="7" viewBox="0 0 8 8" fill="none" aria-hidden="true">
+          <line x1="4" y1="0.8" x2="4" y2="7.2" stroke={FAINT} strokeWidth="1.4" strokeLinecap="round" />
+          <line x1="0.8" y1="4" x2="7.2" y2="4" stroke={FAINT} strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
       </div>
-
-      {/* Icon */}
-      <div style={{ lineHeight: 0 }}>{icon}</div>
-
-      {/* Label */}
-      <div style={{
-        fontFamily: '"Nunito", system-ui',
-        fontSize: 9, fontWeight: 800,
-        color: hasStock ? color : 'rgba(255,255,255,0.3)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.14em',
-        lineHeight: 1,
-        transition: 'color 0.2s ease',
-      }}>
-        {label}
-      </div>
-    </button>
+    </HudPanel>
   );
 }
 
 export default function BottomBar({
-  totalBombs,
-  totalExpands,
-  onBombTap,
-  onExpandTap,
-  onTimeTap,
-  disabled,
+  totalBombs, totalExpands, onBombTap, onExpandTap, onTimeTap, disabled,
 }) {
   const bombCount   = totalBombs   ?? 0;
   const expandCount = totalExpands ?? 0;
 
   return (
     <div style={{ display: 'flex', gap: 8 }}>
-      <PowerItem
-        icon={<BombIcon   size={26} color={bombCount   > 0 ? '#ffd700' : 'rgba(255,215,0,0.28)'} />}
+      <PowerBay
+        icon={<BombIcon size={24} color={bombCount > 0 ? '#ffd54a' : 'rgba(255,213,74,0.26)'} />}
         label="Bombs"
         count={bombCount}
         hasCount={totalBombs !== undefined}
-        color="#ffd700"
+        color="#ffd54a"
         onClick={onBombTap}
         disabled={disabled}
       />
-      <PowerItem
-        icon={<ExpandIcon size={26} color={expandCount > 0 ? '#00d4ff' : 'rgba(0,212,255,0.28)'} />}
+      <PowerBay
+        icon={<ExpandIcon size={24} color={expandCount > 0 ? '#00d4ff' : 'rgba(0,212,255,0.26)'} />}
         label="Expand"
         count={expandCount}
         hasCount={totalExpands !== undefined}
@@ -113,8 +89,8 @@ export default function BottomBar({
         onClick={onExpandTap}
         disabled={disabled}
       />
-      <PowerItem
-        icon={<ClockIcon  size={26} color="rgba(167,139,255,0.85)" />}
+      <PowerBay
+        icon={<ClockIcon size={24} color="#a78bff" />}
         label="Time"
         count={0}
         hasCount={false}

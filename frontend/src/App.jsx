@@ -67,6 +67,10 @@ export default function App() {
   const [splashDone,  setSplashDone]  = useState(false);
   const [screen,      setScreen]      = useState(S.WALLET_CONNECT);
   const [profile,     setProfile]     = useState(null);
+  // Surfaced on the connect screen when the profile read fails; bumping
+  // profileAttempt re-runs it.
+  const [profileError,   setProfileError]   = useState(null);
+  const [profileAttempt, setProfileAttempt] = useState(0);
   const [score,       setScore]       = useState(0);
   const [finalScore,  setFinalScore]  = useState(0);
   const [isNewRecord, setIsNewRecord] = useState(false);
@@ -153,7 +157,7 @@ export default function App() {
   // so the canvas FX and the clock pulse can name the number.
   const handleCollapse = useCallback(() => {
     const lost = halveTime();
-    showToast(`⚠ Collapse — time halved, −${lost}s`, 2400);
+    showToast(`Collapse — time halved, −${lost}s`, 2400);
     return lost;
   }, [halveTime, showToast]);
 
@@ -219,9 +223,13 @@ export default function App() {
       stopEngine();
       stopTimer();
     }
+
+    let cancelled = false;
+    setProfileError(null);
     getOrCreatePlayer(address).catch(console.error);
     getProfile(address)
       .then((p) => {
+        if (cancelled) return;
         setProfile(p);
         if (p.username) {
           localStorage.setItem('nk_username', p.username);
@@ -229,8 +237,17 @@ export default function App() {
         }
         setScreen(p.username ? S.HOME : S.SET_USERNAME);
       })
-      .catch(console.error);
-  }, [address, getProfile, stopEngine, stopTimer]);
+      .catch((err) => {
+        if (cancelled) return;
+        console.error(err);
+        // This read is the ONLY route off the connect screen. Swallowing its
+        // rejection parked the app on "Connecting…" forever with nothing said,
+        // so the failure has to reach the player with a way to retry.
+        setProfileError('Could not reach the Celo network. Check your connection and try again.');
+      });
+
+    return () => { cancelled = true; };
+  }, [address, getProfile, stopEngine, stopTimer, profileAttempt]);
 
   // ── Show how-to-play the first time the HOME screen appears ───────────────
 
@@ -523,7 +540,8 @@ export default function App() {
           onConnectSocial={connectWithSocial}
           socialLoading={socialLoading}
           isMiniPay={isMiniPay}
-          error={walletError}
+          error={walletError ?? profileError}
+          onRetry={profileError ? () => setProfileAttempt(n => n + 1) : undefined}
           onPlayAsGuest={isMiniPay ? undefined : handlePlayAsGuest}
         />
       );
@@ -597,6 +615,7 @@ export default function App() {
         <Profile
           profile={profile}
           address={address}
+          progress={progress}
           onBack={onBackToHome}
           onEditName={() => setScreen(S.SET_USERNAME)}
         />
@@ -709,6 +728,7 @@ export default function App() {
           onGoHome={onBackToHome}
           runSummary={runSummary}
           progress={progress}
+          myUsername={profile?.username}
         />
       );
       break;

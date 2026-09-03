@@ -1,8 +1,9 @@
-import CosmicBackground from '../ui/CosmicBackground.jsx';
-import BackChevron      from '../ui/BackChevron.jsx';
-import Planet           from '../ui/Planet.jsx';
-import { PLANET_DATA }  from '../ui/Planet.jsx';
-import { useTheme }     from '../../theme/ThemeContext.jsx';
+import { useState } from 'react';
+import Planet, { PLANET_DATA } from '../ui/Planet.jsx';
+import { Screen, ScreenHeader, SectionHead, Readout, ReadoutStrip, ReadoutDivider, GhostButton, Rail, Reveal } from '../ui/kit.jsx';
+import { INK, DIM, FAINT, RULE, GOLD, DISPLAY, BODY, NUM } from '../../theme/tokens.js';
+import { useTheme } from '../../theme/ThemeContext.jsx';
+import { levelProgress, titleForLevel } from '../../game/progression.js';
 
 function stageFromScore(score) {
   if (!score || score < 100)  return 2;
@@ -15,73 +16,106 @@ function stageFromScore(score) {
   return 13;
 }
 
-function StatCard({ label, value, color, thumb }) {
-  return (
-    <div style={{
-      borderRadius: 16, padding: '14px 16px', minHeight: 76, boxSizing: 'border-box',
-      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-      display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden',
-    }}>
-      {thumb && <div style={{ flexShrink: 0 }}>{thumb}</div>}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{
-          fontFamily: '"Nunito", system-ui', fontSize: 10.5, color: 'rgba(255,255,255,0.5)',
-          textTransform: 'uppercase', letterSpacing: '0.1em',
-        }}>{label}</div>
-        <div style={{
-          marginTop: 3, fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 17, color,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>{value}</div>
-      </div>
-    </div>
-  );
-}
-
-export default function Profile({ profile, address, onBack, onEditName }) {
+export default function Profile({ profile, address, onBack, onEditName, progress }) {
   const { theme } = useTheme();
   const username = profile?.username || 'Anonymous';
   const best     = profile?.personalBest ?? 0;
   const games    = profile?.gamesPlayed  ?? 0;
   const stage    = stageFromScore(best);
   const planet   = PLANET_DATA[stage - 1];
-  const addr     = address || profile?.address || '';
+  const rank     = levelProgress(progress?.xp ?? 0);
+  const found    = progress?.discovered?.length ?? 0;
+
+  const addr = address || profile?.address || '';
   const shortAddr = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '—';
+  const [copied, setCopied] = useState(false);
+
+  const copyAddress = () => {
+    if (!addr) return;
+    navigator.clipboard?.writeText(addr).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = addr; document.body.appendChild(el);
+      el.select(); document.execCommand('copy');
+      document.body.removeChild(el);
+    });
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
-      <CosmicBackground intensity="medium">
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '18px 20px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <BackChevron onClick={onBack} />
-            <div style={{ fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 21, color: '#fff' }}>Profile</div>
-          </div>
+    <Screen intensity="medium">
+      <ScreenHeader title="Profile" onBack={onBack} />
 
-          <div style={{ marginTop: 26, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 96, height: 96, borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(0,0,0,0.25)', border: '1.5px solid rgba(255,255,255,0.14)',
-            }}>
-              <Planet stage={stage} size={78} glow />
-            </div>
-            <div style={{ fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 22, color: '#fff' }}>{username}</div>
-            <div style={{ fontFamily: '"Space Mono", monospace', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>{shortAddr}</div>
-            <button onClick={onEditName} style={{
-              marginTop: 4, padding: '8px 18px', borderRadius: 99,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.16)',
-              color: '#fff', fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-            }}>Edit name</button>
-          </div>
-
-          <div style={{ flex: 1, overflow: 'auto', marginTop: 28 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <StatCard label="Best score" value={best > 0 ? best.toLocaleString() : '–'} color="#ffd700" />
-              <StatCard label="Games played" value={games > 0 ? games.toLocaleString() : '0'} color={theme.secondary} />
-              <StatCard label="Best planet" value={planet?.name ?? `Stage ${stage}`} color={theme.primary} thumb={<Planet stage={stage} size={30} />} />
-              <StatCard label="Wallet" value={shortAddr} color="rgba(255,255,255,0.75)" />
-            </div>
-          </div>
+      {/* Identity — the planet is the avatar, at a size worth looking at */}
+      <Reveal delay={60} style={{
+        marginTop: 22, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', flex: '0 0 auto',
+      }}>
+        <div className="nk-motion" style={{ animation: 'nk-breathe 7s ease-in-out infinite' }}>
+          <Planet stage={stage} size={92} glow />
         </div>
-      </CosmicBackground>
-    </div>
+        <div style={{
+          marginTop: 14, fontFamily: DISPLAY, fontWeight: 600, fontSize: 24,
+          color: INK, lineHeight: 1.15,
+        }}>
+          {username}
+        </div>
+        <div style={{ marginTop: 2, fontFamily: BODY, fontSize: 12, fontWeight: 700, color: DIM }}>
+          {titleForLevel(rank.level)}
+        </div>
+        <button
+          onClick={copyAddress}
+          className="nk-press-sm"
+          style={{
+            marginTop: 9, padding: '4px 10px', borderRadius: 8,
+            background: 'transparent',
+            border: `1px solid ${copied ? 'rgba(46,204,113,0.5)' : RULE}`,
+            fontFamily: NUM, fontSize: 10.5, fontWeight: 700,
+            color: copied ? '#2ecc71' : FAINT,
+          }}
+        >
+          {copied ? 'Copied' : shortAddr}
+        </button>
+      </Reveal>
+
+      <Reveal delay={130} style={{ marginTop: 22, flex: '0 0 auto' }}>
+        <ReadoutStrip>
+          <Readout label="Best" value={best > 0 ? best.toLocaleString() : '—'} accent={GOLD} />
+          <ReadoutDivider />
+          <Readout label="Runs" value={games.toLocaleString()} />
+          <ReadoutDivider />
+          <Readout label="Level" value={rank.level} accent={theme.secondary} />
+        </ReadoutStrip>
+      </Reveal>
+
+      <div style={{
+        flex: '1 1 auto', overflowY: 'auto', marginTop: 22,
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <SectionHead delay={190}>Furthest reached</SectionHead>
+        <Reveal delay={210} style={{ marginBottom: 22 }}>
+          <Rail accent={theme.primary}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Planet stage={stage} size={34} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: DISPLAY, fontSize: 16, fontWeight: 600, color: INK }}>
+                  {planet?.name ?? `Stage ${stage}`}
+                </div>
+                <div style={{ marginTop: 1, fontFamily: BODY, fontSize: 11.5, color: DIM }}>
+                  Stage {stage} of {PLANET_DATA.length} · {found} catalogued
+                </div>
+              </div>
+            </div>
+          </Rail>
+        </Reveal>
+
+        <div style={{ flex: 1, minHeight: 12 }} />
+
+        <SectionHead delay={250}>Account</SectionHead>
+        <Reveal delay={270}>
+          <GhostButton onClick={onEditName}>Edit name</GhostButton>
+        </Reveal>
+      </div>
+    </Screen>
   );
 }

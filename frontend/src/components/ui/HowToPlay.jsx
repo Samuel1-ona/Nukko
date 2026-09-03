@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { FRUITS, drawFruitOnCtx } from '../../game/fruits.js';
-import { BombIcon, ExpandIcon, ClockIcon } from './Icons.jsx';
+import {
+  BombIcon, ExpandIcon, ClockIcon,
+  DragIcon, DropIcon, ArrowRightIcon, WarningIcon, RocketIcon, ChevronLeftIcon,
+} from './Icons.jsx';
+import { PrimaryButton } from './kit.jsx';
+import { INK, DIM, FAINT, RULE, DISPLAY, BODY } from '../../theme/tokens.js';
 import { useTheme } from '../../theme/ThemeContext.jsx';
 
 // ── Planet rendered with the actual game engine ────────────────────────────
@@ -60,11 +65,15 @@ function VisualDrop() {
       {/* Right: labels */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `rgba(${theme.secondaryRGB},0.15)`, border: `1px solid rgba(${theme.secondaryRGB},0.5)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>👆</div>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `rgba(${theme.secondaryRGB},0.15)`, border: `1px solid rgba(${theme.secondaryRGB},0.5)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <DragIcon size={14} color={theme.secondary} />
+          </div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: '"Nunito",system-ui', lineHeight: 1.3 }}>Drag to aim</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `rgba(${theme.primaryRGB},0.15)`, border: `1px solid rgba(${theme.primaryRGB},0.5)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>🙌</div>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: `rgba(${theme.primaryRGB},0.15)`, border: `1px solid rgba(${theme.primaryRGB},0.5)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <DropIcon size={14} color={theme.primary} />
+          </div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: '"Nunito",system-ui', lineHeight: 1.3 }}>Release to drop</span>
         </div>
       </div>
@@ -82,7 +91,7 @@ function VisualMerge() {
       <div style={{ filter: 'drop-shadow(0 0 8px #c9c4ba66)' }}>
         <PlanetCanvas idx={4} size={66} />
       </div>
-      <span style={{ fontSize: 20, color: 'rgba(255,255,255,0.45)', fontFamily: '"Space Mono",monospace' }}>→</span>
+      <ArrowRightIcon size={20} color={FAINT} />
       <div style={{ position: 'relative' }}>
         <div style={{
           position: 'absolute', inset: -10, borderRadius: '50%',
@@ -119,7 +128,11 @@ function VisualDanger() {
         whiteSpace: 'nowrap', fontFamily: '"Space Mono",monospace',
         background: 'rgba(255,59,59,0.15)', border: '1px solid rgba(255,59,59,0.45)',
         borderRadius: 6, padding: '2px 8px',
-      }}>▲ DANGER ZONE</div>
+        display: 'flex', alignItems: 'center', gap: 5,
+      }}>
+        <WarningIcon size={10} color="#ff3b3b" />
+        DANGER ZONE
+      </div>
       {/* Stacked planets near the line */}
       <div style={{
         position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
@@ -163,7 +176,7 @@ const SLIDES = [
   {
     id: 'welcome',
     Visual: VisualWelcome,
-    title: 'Welcome to Nukko 🪐',
+    title: 'Welcome to Nukko',
     body: 'A cosmic puzzle where you drop planets, trigger merges, and evolve the universe one collision at a time.',
   },
   {
@@ -248,18 +261,16 @@ export default function HowToPlay({ onDone }) {
                 width: i === step ? 18 : 6, height: 6,
                 borderRadius: 3,
                 background: i === step
-                  ? `linear-gradient(90deg, ${theme.primary}, ${theme.secondary})`
-                  : i < step ? `rgba(${theme.primaryRGB},0.55)` : 'rgba(255,255,255,0.15)',
+                  ? theme.primary
+                  : i < step ? `rgba(${theme.primaryRGB},0.5)` : RULE,
                 transition: 'width 0.25s ease, background 0.25s ease',
               }} />
             ))}
           </div>
-          <button onClick={finish} style={{
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.14)',
-            borderRadius: 8, padding: '4px 12px',
-            fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)',
-            fontFamily: '"Nunito",system-ui', cursor: 'pointer',
+          <button onClick={finish} className="nk-press-sm" style={{
+            background: 'none', border: 'none', padding: '4px 0',
+            fontSize: 11.5, fontWeight: 800, color: FAINT,
+            fontFamily: BODY, cursor: 'pointer',
           }}>
             Skip
           </button>
@@ -287,14 +298,14 @@ export default function HowToPlay({ onDone }) {
           transition: 'opacity 0.18s ease, transform 0.18s ease',
         }}>
           <div style={{
-            fontSize: 20, fontWeight: 900, color: '#fff',
-            fontFamily: '"Nunito",system-ui', lineHeight: 1.2, marginBottom: 8,
+            fontSize: 22, fontWeight: 600, color: INK,
+            fontFamily: DISPLAY, lineHeight: 1.2, marginBottom: 8,
           }}>
             {title}
           </div>
           <div style={{
-            fontSize: 13.5, color: 'rgba(255,255,255,0.62)',
-            fontFamily: '"Nunito",system-ui', lineHeight: 1.6,
+            fontSize: 13.5, color: DIM,
+            fontFamily: BODY, lineHeight: 1.65,
           }}>
             {body}
           </div>
@@ -306,35 +317,26 @@ export default function HowToPlay({ onDone }) {
         }}>
           {/* Back button — hidden on first slide */}
           {step > 0 && (
-            <button onClick={() => go(-1)} style={{
+            <button onClick={() => go(-1)} aria-label="Previous" className="nk-press" style={{
               flex: '0 0 48px', height: 48,
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 14, fontSize: 18, color: 'rgba(255,255,255,0.55)',
+              background: 'transparent',
+              border: `1px solid ${RULE}`,
+              borderRadius: 12,
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>‹</button>
+            }}>
+              <ChevronLeftIcon size={16} color={DIM} />
+            </button>
           )}
 
           {/* Next / Let's Play */}
-          <button
+          <PrimaryButton
             onClick={isLast ? finish : () => go(1)}
-            style={{
-              flex: 1, height: 48,
-              background: isLast
-                ? theme.gradient
-                : `rgba(${theme.primaryRGB},0.22)`,
-              border: `1px solid ${isLast ? 'transparent' : `rgba(${theme.primaryRGB},0.45)`}`,
-              borderRadius: 14,
-              fontSize: 15, fontWeight: 800,
-              color: '#fff',
-              fontFamily: '"Nunito",system-ui',
-              cursor: 'pointer',
-              boxShadow: isLast ? `0 4px 24px rgba(${theme.primaryRGB},0.45)` : 'none',
-              transition: 'background 0.2s, box-shadow 0.2s',
-            }}
+            height={48}
+            style={{ flex: 1, width: 'auto' }}
+            icon={isLast ? <RocketIcon size={15} color="#fff" /> : undefined}
           >
-            {isLast ? '🚀  Let\'s Play!' : 'Next  ›'}
-          </button>
+            {isLast ? "Let's Play" : 'Next'}
+          </PrimaryButton>
         </div>
       </div>
     </div>

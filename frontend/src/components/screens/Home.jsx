@@ -1,35 +1,69 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import NukkoWordmark    from '../ui/NukkoWordmark.jsx';
-import Planet           from '../ui/Planet.jsx';
+import Orrery           from '../ui/Orrery.jsx';
+import Planet, { PLANET_DATA } from '../ui/Planet.jsx';
 import Leaderboard      from '../ui/Leaderboard.jsx';
 import { isAdminWallet } from '../../utils/admin.js';
-import { XLogoIcon, SettingsIcon, RankingIcon, TrophyIcon, ProfileIcon } from '../ui/Icons.jsx';
+import {
+  XLogoIcon, SettingsIcon, PlayIcon, FlameIcon, LadderIcon, CheckIcon,
+} from '../ui/Icons.jsx';
 import { openXProfile, X_HANDLE } from '../../utils/social.js';
-import { useTheme }     from '../../theme/ThemeContext.jsx';
-import { PLANET_DATA }  from '../ui/Planet.jsx';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 import { levelProgress, titleForLevel } from '../../game/progression.js';
+import {
+  HudPanel, HudCell, ModuleTile, Segmented, ProgressRing, GhostButton,
+} from '../ui/kit.jsx';
+import { INK, DIM, FAINT, RULE, GOLD, DISPLAY, BODY, NUM } from '../../theme/tokens.js';
 
-function MenuTile({ icon, label, onClick }) {
-  return (
-    <button onClick={onClick} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-      padding: '14px 6px', borderRadius: 18,
-      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)',
-      cursor: 'pointer',
-    }}>
-      <div style={{
-        width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {icon}
-      </div>
-      <div style={{
-        fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 700,
-        color: '#fff', textAlign: 'center',
-      }}>{label}</div>
-    </button>
-  );
+function prefersReducedMotion() {
+  return typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Counts a number up on mount. The best score should feel earned, not printed. */
+function useCountUp(target, ms = 1100) {
+  const [value, setValue] = useState(prefersReducedMotion() ? target : 0);
+
+  useEffect(() => {
+    if (!target || prefersReducedMotion()) { setValue(target ?? 0); return; }
+    let raf, start;
+    const step = (t) => {
+      start ??= t;
+      const p = Math.min(1, (t - start) / ms);
+      setValue(Math.round(target * (1 - Math.pow(1 - p, 5))));   // ease-out-quint
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+
+    // Wallet browsers background aggressively, and a backgrounded tab freezes
+    // requestAnimationFrame mid-count. Both guards below snap to the real
+    // number so the player never returns to a score that is quietly wrong.
+    const settle = setTimeout(() => setValue(target), ms + 300);
+    const onVisible = () => { if (document.visibilityState === 'visible') setValue(target); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(settle);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [target, ms]);
+
+  return value;
+}
+
+/** Measures a node so the orrery can size itself to the actual phone viewport. */
+function useMeasuredHeight(ref) {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setH(e.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return h;
 }
 
 function stageFromScore(score) {
@@ -43,484 +77,374 @@ function stageFromScore(score) {
   return 13;
 }
 
-// ── Ladder entry point ───────────────────────────────────────────────────────
-
-function LadderCard({ ladder, unclaimedRewards, onOpen }) {
-  if (!ladder) return null;
-
-  // How far through this week's card the player is, averaged across the four
-  // objectives — enough to show momentum without repeating the whole panel.
-  const objectives = ladder.objectives ?? [];
-  const pct = objectives.length
-    ? Math.round((objectives.reduce((a, o) => a + o.fraction, 0) / objectives.length) * 100)
-    : 0;
-  const metCount = objectives.filter(o => o.met).length;
-
-  return (
-    <button
-      onClick={onOpen}
-      style={{
-        width: '100%', marginTop: 14, padding: '14px 16px', borderRadius: 18,
-        background: ladder.atRisk
-          ? 'linear-gradient(145deg, rgba(255,92,92,0.16) 0%, rgba(123,47,255,0.12) 100%)'
-          : 'linear-gradient(145deg, rgba(123,47,255,0.24) 0%, rgba(0,212,255,0.10) 100%)',
-        border: `1px solid ${ladder.atRisk ? 'rgba(255,92,92,0.4)' : 'rgba(255,255,255,0.12)'}`,
-        cursor: 'pointer', textAlign: 'left',
-        WebkitTapHighlightColor: 'transparent', position: 'relative',
-      }}
-    >
-      {unclaimedRewards > 0 && (
-        <div style={{
-          position: 'absolute', top: 10, right: 12,
-          padding: '3px 8px', borderRadius: 8, background: '#ffd700',
-          fontFamily: '"Nunito", system-ui', fontSize: 9, fontWeight: 900, color: '#08010f',
-        }}>
-          {unclaimedRewards} REWARD{unclaimedRewards > 1 ? 'S' : ''}
-        </div>
-      )}
-
-      <div style={{
-        fontFamily: '"Nunito", system-ui', fontSize: 9, fontWeight: 800,
-        letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)',
-      }}>
-        Level {ladder.level} of {ladder.maxLevel}
-      </div>
-      <div style={{
-        fontFamily: '"Nunito", system-ui', fontSize: 16, fontWeight: 900,
-        color: '#fff', lineHeight: 1.3, marginBottom: 8,
-      }}>
-        {ladder.badge}
-      </div>
-
-      <div style={{ height: 6, borderRadius: 3, background: 'rgba(0,0,0,0.28)', overflow: 'hidden', marginBottom: 7 }}>
-        <div style={{
-          width: `${pct}%`, height: '100%', borderRadius: 3,
-          background: 'linear-gradient(90deg, #7b2fff, #00d4ff)',
-          transition: 'width 400ms ease',
-        }} />
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{
-          fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 700,
-          color: ladder.atRisk ? '#ff5c5c' : 'rgba(255,255,255,0.55)',
-        }}>
-          {ladder.atRisk ? '⚠ Drops on Monday unless you clear it' : `${metCount}/4 objectives met`}
-        </span>
-        <span style={{
-          fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 800, color: '#00d4ff',
-        }}>
-          View →
-        </span>
-      </div>
-    </button>
-  );
-}
-
-function StatPill({ label, value, accent }) {
-  return (
-    <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-      padding: '10px 8px', borderRadius: 14,
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.08)',
-    }}>
-      <div style={{
-        fontFamily: '"Space Mono", monospace', fontWeight: 700,
-        fontSize: 18, color: accent ?? '#fff',
-        fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-      }}>
-        {value}
-      </div>
-      <div style={{
-        fontFamily: '"Nunito", system-ui', fontSize: 9,
-        color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.12em',
-      }}>
-        {label}
-      </div>
-    </div>
-  );
-}
-
 function fmt(s) {
   return [Math.floor(s / 60), s % 60].map(n => String(n).padStart(2, '0')).join(':');
 }
 
-export default function Home({ profile, address: walletAddress, isMiniPay, leaderboard, leaderboardLoading, onOpenModes, onOpenLegal, onOpenFAQ, onOpenSettings, onOpenProfile, onOpenCodex, onOpenLeaderboard, hasPausedGame, pausedScore, pausedRemaining, onContinueGame, progress, challenges, challengesDone, streakBroken, ladder, unclaimedRewards = 0, onOpenLadder }) {
-  const { theme } = useTheme();
-  const username  = profile?.username || 'Anonymous';
-  const best      = profile?.personalBest ?? 0;
-  const games     = profile?.gamesPlayed  ?? 0;
-  const stage     = stageFromScore(best);
-  const codexFound = progress?.discovered?.length ?? 0;
-  const codexTotal = PLANET_DATA.length;
-  const streak     = streakBroken ? 0 : (progress?.streak ?? 0);
-  const rank       = levelProgress(progress?.xp ?? 0);
-  // Prefer direct wallet address over profile.address — profile may not include it
-  const addr      = walletAddress || profile?.address || '';
-  const shortAddr = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '';
-  const [copied, setCopied] = useState(false);
+/** The arcade control. Chunky, notched, one hue, light travelling across it. */
+function PlayButton({ label, onClick, theme }) {
+  const notch = 13;
+  const clip = `polygon(0 0, calc(100% - ${notch}px) 0, 100% ${notch}px, 100% 100%, ${notch}px 100%, 0 calc(100% - ${notch}px))`;
+  return (
+    <button
+      onClick={onClick}
+      className="nk-press"
+      style={{
+        position: 'relative', overflow: 'hidden',
+        width: '100%', height: 62, border: 'none', padding: 0,
+        clipPath: clip,
+        background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 42%, rgba(0,0,0,0.2) 100%), ${theme.primary}`,
+        boxShadow: `inset 0 -3px 0 rgba(0,0,0,0.32), inset 0 2px 0 rgba(255,255,255,0.3)`,
+        color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+      }}
+    >
+      <PlayIcon size={15} />
+      <span style={{
+        fontFamily: DISPLAY, fontWeight: 600, fontSize: 21, letterSpacing: '0.16em',
+        textTransform: 'uppercase',
+      }}>
+        {label}
+      </span>
+      <span className="nk-motion" style={{
+        position: 'absolute', top: 0, bottom: 0, left: 0, width: 64,
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+        animation: 'nk-sweep 6.5s ease-in-out infinite',
+        pointerEvents: 'none',
+      }} />
+    </button>
+  );
+}
 
-  const copyAddress = () => {
-    if (!addr) return;
-    navigator.clipboard?.writeText(addr).catch(() => {
-      const el = document.createElement('textarea');
-      el.value = addr; document.body.appendChild(el);
-      el.select(); document.execCommand('copy');
-      document.body.removeChild(el);
-    });
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+/* ── Screen ─────────────────────────────────────────────────────────────── */
+
+export default function Home({
+  profile, address: walletAddress, isMiniPay, leaderboard = [], leaderboardLoading,
+  onOpenModes, onOpenLegal, onOpenFAQ, onOpenSettings, onOpenProfile, onOpenCodex,
+  onOpenLeaderboard, hasPausedGame, pausedScore, pausedRemaining, onContinueGame,
+  progress, challenges, challengesDone, streakBroken, ladder, unclaimedRewards = 0,
+  onOpenLadder,
+}) {
+  const { theme } = useTheme();
+
+  const username = profile?.username || 'Anonymous';
+  const best     = profile?.personalBest ?? 0;
+  const games    = profile?.gamesPlayed  ?? 0;
+  const stage    = stageFromScore(best);
+  const rank     = levelProgress(progress?.xp ?? 0);
+  const streak   = streakBroken ? 0 : (progress?.streak ?? 0);
+  const discovered = progress?.discovered ?? [];
+  const isNewPlayer = games === 0 && best === 0;
+
+  const standing = useMemo(() => {
+    const i = leaderboard.findIndex(e => e.username && e.username === username);
+    return i === -1 ? null : (leaderboard[i].rank ?? i + 1);
+  }, [leaderboard, username]);
+
+  const shownBest = useCountUp(best);
+  const doneCount = challenges?.filter(c => challengesDone?.includes(c.id)).length ?? 0;
+
+  // One block of text at a time, rather than every section stacked open.
+  const [panel, setPanel] = useState('today');
+
+  const rootRef = useRef(null);
+  const boxH    = useMeasuredHeight(rootRef);
+  const orrerySize = Math.round(Math.max(160, Math.min(276, (boxH || 800) * 0.345)));
+  const orreryBand = Math.round(orrerySize * 0.66);
+
+  const ladderPct = ladder?.objectives?.length
+    ? ladder.objectives.reduce((a, o) => a + o.fraction, 0) / ladder.objectives.length
+    : 0;
+
+  const legalLinks = [
+    { key: 'terms',   label: 'Terms',   action: () => onOpenLegal?.('terms')   },
+    { key: 'privacy', label: 'Privacy', action: () => onOpenLegal?.('privacy') },
+    { key: 'faq',     label: 'FAQ',     action: () => onOpenFAQ?.()            },
+    { key: 'about',   label: 'About',   action: () => onOpenLegal?.('about')   },
+    // Owner-only. Server-enforced — this just saves typing #admin.
+    ...(isAdminWallet(walletAddress)
+      ? [{ key: 'admin', label: 'Admin', action: () => { window.location.hash = 'admin'; } }]
+      : []),
+  ];
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
-      <CosmicBackground intensity="medium">
+    <div ref={rootRef} style={{ position: 'absolute', inset: 0, background: theme.bgGradient }}>
+      <CosmicBackground intensity="lush">
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
 
-          {/* ── Header bar ─────────────────────────────────────────────── */}
-          <div style={{
+          {/* ── Header ───────────────────────────────────────────────── */}
+          <div className="nk-rise" style={{
+            flex: '0 0 auto',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '20px 20px 0',
+            padding: '14px 16px 0',
           }}>
-            <NukkoWordmark size={28} />
-            <button
-              onClick={onOpenSettings}
-              style={{
-                width: 40, height: 40, borderRadius: 99,
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              }}
-            >
-              <SettingsIcon size={20} color="#fff" />
-            </button>
+            <NukkoWordmark size={21} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={onOpenProfile}
+                aria-label="Your profile"
+                className="nk-press-sm"
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', padding: 0,
+                  background: 'rgba(0,0,0,0.3)', border: `1px solid ${RULE}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Planet stage={stage} size={22} />
+              </button>
+              <button
+                onClick={onOpenSettings}
+                aria-label="Settings"
+                className="nk-press-sm"
+                style={{
+                  width: 32, height: 32, borderRadius: '50%', padding: 0,
+                  background: 'transparent', border: `1px solid ${RULE}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <SettingsIcon size={15} color={DIM} />
+              </button>
+            </div>
           </div>
 
-          {/* ── Scrollable body ─────────────────────────────────────────── */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 8px' }}>
+          {/* ── Deck ─────────────────────────────────────────────────── */}
+          <div style={{ flex: '0 0 auto', padding: '0 16px' }}>
 
-            {/* Player card — tappable, opens Profile */}
-            <div onClick={onOpenProfile} style={{
-              cursor: 'pointer',
-              borderRadius: 22, padding: '18px 18px 16px',
-              background: `linear-gradient(145deg, rgba(${theme.primaryRGB},0.32) 0%, rgba(${theme.secondaryRGB},0.14) 100%)`,
-              border: '1px solid rgba(255,255,255,0.12)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14)',
+            <div className="nk-rise" style={{
+              position: 'relative', height: orreryBand,
+              margin: '2px 0 4px', animationDelay: '60ms',
             }}>
-              {/* Avatar + name row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: '50%', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,0,0,0.25)',
-                  border: '1.5px solid rgba(255,255,255,0.14)',
-                }}>
-                  <Planet stage={stage} size={42} glow />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontFamily: '"Nunito", system-ui', fontWeight: 800,
-                    fontSize: 19, color: '#fff', lineHeight: 1.2,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {username}
-                  </div>
-                  <div style={{
-                    marginTop: 1, fontFamily: '"Nunito", system-ui', fontSize: 11,
-                    fontWeight: 700, color: 'rgba(255,255,255,0.6)',
-                  }}>
-                    {titleForLevel(rank.level)}
-                  </div>
-                  {shortAddr && !isMiniPay && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); copyAddress(); }}
-                      style={{
-                        marginTop: 4, padding: '3px 8px',
-                        borderRadius: 8,
-                        background: 'rgba(255,255,255,0.06)',
-                        border: `1px solid ${copied ? 'rgba(46,204,113,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                        cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        transition: 'border-color 0.2s',
-                      }}
-                    >
-                      <span style={{
-                        fontFamily: '"Space Mono", monospace', fontSize: 11, fontWeight: 700,
-                        color: copied ? '#2ecc71' : 'rgba(255,255,255,0.5)',
-                      }}>
-                        {copied ? 'Copied!' : shortAddr}
-                      </span>
-                      <svg width="11" height="11" viewBox="0 0 15 15" fill="none">
-                        {copied ? (
-                          <polyline points="2,8 6,12 13,4" stroke="#2ecc71" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                        ) : (
-                          <>
-                            <rect x="4" y="4" width="8" height="8" rx="1.5" stroke="rgba(255,255,255,0.4)" strokeWidth="1.4"/>
-                            <path d="M3 10V3a1 1 0 0 1 1-1h7" stroke="rgba(255,255,255,0.3)" strokeWidth="1.4" strokeLinecap="round"/>
-                          </>
-                        )}
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Stats row */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <StatPill label="Best" value={best > 0 ? best.toLocaleString() : '–'} accent="#ffd700" />
-                <StatPill label="Games" value={games > 0 ? games.toLocaleString() : '0'} accent={theme.secondary} />
-                <StatPill label="Rank" value={`${rank.level}`} accent="#a78bff" />
+              <div style={{
+                position: 'absolute', left: '50%', top: '50%',
+                transform: 'translate(-50%, -50%)',
+              }}>
+                <Orrery stage={stage} discovered={discovered} size={orrerySize} />
               </div>
             </div>
 
-            {/* ── Ladder card ─────────────────────────────────────────── */}
-            <LadderCard
-              ladder={ladder}
-              unclaimedRewards={unclaimedRewards}
-              onOpen={onOpenLadder}
-            />
-            {/* Menu tiles */}
-            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-              <MenuTile icon={<RankingIcon size={18} color={theme.secondary} />} label="Leaderboard" onClick={onOpenLeaderboard} />
-              <MenuTile
-                icon={<TrophyIcon size={18} color="#ffd700" />}
-                label={`Codex ${codexFound}/${codexTotal}`}
-                onClick={onOpenCodex}
-              />
-              <MenuTile icon={<ProfileIcon size={18} color={theme.primary} />} label="Profile" onClick={onOpenProfile} />
-            </div>
-
-            {/* ── Daily challenges + streak ──────────────────────────────── */}
-            {challenges?.length > 0 && (
-              <div style={{
-                marginTop: 14, borderRadius: 18, padding: '13px 15px',
-                background: 'rgba(255,255,255,0.035)',
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 9, gap: 8,
-                }}>
-                  <span style={{
-                    fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 800,
-                    letterSpacing: '0.14em', textTransform: 'uppercase',
-                    color: 'rgba(255,255,255,0.45)',
-                  }}>Today's challenges</span>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 800,
-                    color: streak > 0 && !streakBroken ? '#ffd700' : 'rgba(255,255,255,0.35)',
-                  }}>
-                    🔥 {streak} day{streak === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {challenges.map(c => {
-                    const done = challengesDone?.includes(c.id);
-                    return (
-                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                        <div style={{
-                          width: 16, height: 16, borderRadius: 5, flexShrink: 0,
-                          background: done ? '#00e676' : 'rgba(255,255,255,0.07)',
-                          border: `1px solid ${done ? '#00e676' : 'rgba(255,255,255,0.16)'}`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          {done && (
-                            <svg width="9" height="9" viewBox="0 0 14 14" fill="none">
-                              <path d="M2.5 7.2 5.8 10 11.5 3.5" stroke="#06210f" strokeWidth="2.6"
-                                strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          )}
-                        </div>
-                        <span style={{
-                          fontFamily: '"Nunito", system-ui', fontSize: 12,
-                          color: done ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.8)',
-                          textDecoration: done ? 'line-through' : 'none',
-                        }}>{c.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Leaderboard */}
-            <div style={{
-              marginTop: 20, marginBottom: 10,
-              display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+            {/* Name + level badge — two elements, not three lines of prose */}
+            <div className="nk-rise" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+              animationDelay: '140ms',
             }}>
-              <div style={{
-                fontFamily: '"Nunito", system-ui', fontWeight: 800,
-                fontSize: 15, color: '#fff', letterSpacing: '0.02em',
+              <span style={{
+                fontFamily: DISPLAY, fontWeight: 600, fontSize: 23, color: INK,
+                lineHeight: 1.15, maxWidth: '62%',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                Cosmic Leaderboard
-              </div>
-              <button onClick={onOpenLeaderboard} style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 700, color: theme.secondary,
-              }}>
-                See all
+                {username}
+              </span>
+              <button
+                onClick={onOpenProfile}
+                className="nk-press-sm"
+                title={titleForLevel(rank.level)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 9px 3px 5px', borderRadius: 99, flexShrink: 0,
+                  background: `rgba(${theme.secondaryRGB},0.13)`,
+                  border: `1px solid rgba(${theme.secondaryRGB},0.4)`,
+                }}
+              >
+                <ProgressRing size={16} stroke={2} pct={rank.pct} color={theme.secondary} />
+                <span style={{
+                  fontFamily: NUM, fontSize: 11, fontWeight: 700, color: theme.secondary,
+                }}>
+                  LV {rank.level}
+                </span>
               </button>
             </div>
 
-            <Leaderboard
-              entries={leaderboard}
-              loading={leaderboardLoading}
-              myUsername={username}
-            />
-
-            {/* bottom spacer so content doesn't hide behind CTA */}
-            <div style={{ height: 100 }} />
-          </div>
-
-          {/* ── Sticky bottom CTA ───────────────────────────────────────── */}
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            padding: '12px 16px 28px',
-            background: 'linear-gradient(to top, #0a0015 60%, transparent)',
-            pointerEvents: 'none',
-          }}>
-
-            {hasPausedGame ? (
-              /* ── Paused-game banner + Continue ─────────────────────── */
-              <div style={{ pointerEvents: 'all', display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-                {/* Info strip */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px', borderRadius: 14,
-                  background: `rgba(${theme.primaryRGB},0.12)`,
-                  border: `1px solid rgba(${theme.primaryRGB},0.3)`,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#a78bff', boxShadow: '0 0 6px #a78bff', animation: 'nukko-pulse 0.9s ease-in-out infinite alternate' }} />
-                    <span style={{ fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 12, color: '#a78bff' }}>
-                      Game paused
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 13, color: '#ffd700' }}>
-                        {Number(pausedScore).toLocaleString()}
-                      </div>
-                      <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>score</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 13, color: '#00d4ff' }}>
-                        {fmt(pausedRemaining ?? 0)}
-                      </div>
-                      <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>left</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Continue button — primary */}
-                <button
-                  onClick={onContinueGame}
-                  style={{
-                    width: '100%', height: 58, borderRadius: 18,
-                    background: theme.gradient,
-                    border: 'none', color: '#fff',
-                    fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 18,
-                    cursor: 'pointer',
-                    boxShadow: `0 12px 36px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`,
-                    animation: 'nukko-glow-pulse 2.4s ease-in-out infinite',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-                  }}
-                >
-                  {/* Play icon */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 2.5l10 5.5-10 5.5V2.5Z" fill="white"/>
-                  </svg>
-                  Continue Game
-                </button>
-
-                {/* New game — ghost secondary */}
-                <button
-                  onClick={onOpenModes}
-                  style={{
-                    width: '100%', height: 42, borderRadius: 14,
-                    background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'rgba(255,255,255,0.35)',
-                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 13,
-                    cursor: 'pointer',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Start New Game
-                </button>
+            {isNewPlayer && (
+              <div className="nk-rise" style={{
+                marginTop: 5, textAlign: 'center', animationDelay: '170ms',
+                fontFamily: BODY, fontSize: 12, fontWeight: 700,
+                color: 'rgba(246,241,251,0.8)',
+                textShadow: '0 1px 6px rgba(8,1,15,0.7)',
+              }}>
+                Same meets same. Watch them grow.
               </div>
-            ) : (
-              /* ── Normal Play Now ────────────────────────────────────── */
-              <>
-                <button
-                  onClick={onOpenModes}
-                  style={{
-                    pointerEvents: 'all',
-                    width: '100%', height: 58, borderRadius: 18,
-                    background: theme.gradient,
-                    border: 'none', color: '#fff',
-                    fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 18,
-                    cursor: 'pointer',
-                    boxShadow: `0 12px 36px -8px rgba(${theme.primaryRGB},0.6), inset 0 1px 0 rgba(255,255,255,0.25)`,
-                    animation: 'nukko-glow-pulse 2.4s ease-in-out infinite',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Play Now
-                </button>
-              </>
             )}
 
-            {/* Follow on X */}
+            {/* Instrument housing — three tappable readouts */}
+            <div className="nk-rise" style={{ marginTop: 13, animationDelay: '200ms' }}>
+              <HudPanel>
+                <div style={{ display: 'flex' }}>
+                  <HudCell label="Best" value={shownBest > 0 ? shownBest.toLocaleString() : '—'} accent={GOLD} onClick={onOpenProfile} />
+                  <HudCell label="Rank" value={standing ? `#${standing}` : '—'} accent={standing ? theme.secondary : undefined} onClick={onOpenLeaderboard} />
+                  <HudCell label="Codex" value={`${discovered.length}/${PLANET_DATA.length}`} onClick={onOpenCodex} last />
+                </div>
+              </HudPanel>
+            </div>
+
+            {/* Launch */}
+            <div className="nk-rise" style={{ marginTop: 12, animationDelay: '250ms' }}>
+              {hasPausedGame ? (
+                <>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    marginBottom: 8, fontFamily: NUM, fontSize: 11.5, fontWeight: 700,
+                  }}>
+                    <span style={{
+                      fontFamily: BODY, fontSize: 9, fontWeight: 800,
+                      letterSpacing: '0.16em', textTransform: 'uppercase', color: theme.secondary,
+                    }}>
+                      In progress
+                    </span>
+                    <span style={{ color: GOLD }}>{Number(pausedScore).toLocaleString()}</span>
+                    <span style={{ color: FAINT }}>{fmt(pausedRemaining ?? 0)}</span>
+                  </div>
+                  <PlayButton label="Resume" onClick={onContinueGame} theme={theme} />
+                  <GhostButton onClick={onOpenModes} height={36} style={{ marginTop: 8 }}>
+                    New run
+                  </GhostButton>
+                </>
+              ) : (
+                <PlayButton label={isNewPlayer ? 'Start' : 'Play'} onClick={onOpenModes} theme={theme} />
+              )}
+            </div>
+
+          </div>
+
+          {/* ── Switchable compartment: one block of text at a time ──── */}
+          <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', padding: '13px 16px 0' }}>
+            <HudPanel
+              style={{ minHeight: 0, maxHeight: '100%' }}
+              innerStyle={{ display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: '100%' }}
+            >
+              <div className="nk-rise" style={{ flex: '0 0 auto', padding: '9px 10px 0', animationDelay: '350ms' }}>
+                <Segmented
+                  value={panel}
+                  onChange={setPanel}
+                  options={[
+                    { key: 'today', label: `Today ${doneCount}/${challenges?.length ?? 0}` },
+                    { key: 'ranks', label: 'Ranks' },
+                  ]}
+                />
+              </div>
+
+              <div
+                className="nk-rise"
+                style={{
+                  flex: '1 1 auto', minHeight: 0, overflowY: 'auto',
+                  padding: '4px 12px 10px', animationDelay: '390ms',
+                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%)',
+                  maskImage: 'linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%)',
+                }}
+              >
+              {panel === 'today' ? (
+                challenges?.length > 0 ? (
+                  challenges.map((c, i) => {
+                    const done = challengesDone?.includes(c.id);
+                    return (
+                      <div key={c.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '9px 2px',
+                        borderBottom: i < challenges.length - 1 ? `1px solid ${RULE}` : 'none',
+                      }}>
+                        <div style={{
+                          width: 17, height: 17, borderRadius: 5, flexShrink: 0,
+                          background: done ? '#00e676' : 'rgba(0,0,0,0.3)',
+                          border: `1px solid ${done ? '#00e676' : RULE}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {done && <CheckIcon size={10} color="#06210f" strokeWidth={3.4} />}
+                        </div>
+                        <span style={{
+                          fontFamily: BODY, fontSize: 12.5, fontWeight: 600,
+                          color: done ? FAINT : 'rgba(233,224,246,0.88)',
+                          textDecoration: done ? 'line-through' : 'none',
+                        }}>
+                          {c.label}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ padding: '18px 0', textAlign: 'center', fontFamily: BODY, fontSize: 12, color: FAINT }}>
+                    No challenges today.
+                  </div>
+                )
+              ) : (
+                <>
+                  <Leaderboard
+                    entries={leaderboard.slice(0, 5)}
+                    loading={leaderboardLoading}
+                    myUsername={username}
+                  />
+                  {leaderboard.length > 5 && (
+                    <button onClick={onOpenLeaderboard} className="nk-press-sm" style={{
+                      width: '100%', marginTop: 10, padding: '8px 0',
+                      background: 'none', border: 'none',
+                      fontFamily: BODY, fontSize: 11, fontWeight: 800,
+                      letterSpacing: '0.14em', textTransform: 'uppercase', color: DIM,
+                    }}>
+                      See all
+                    </button>
+                  )}
+                </>
+              )}
+                <div style={{ height: 4 }} />
+              </div>
+            </HudPanel>
+            <div style={{ flex: '1 1 auto', minHeight: 0 }} />
+          </div>
+
+          {/* ── Bottom rack: two modules, then fine print ────────────── */}
+          <div className="nk-rise" style={{
+            flex: '0 0 auto', padding: '10px 16px 0',
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9,
+            animationDelay: '430ms',
+          }}>
+            <ModuleTile
+              icon={<LadderIcon size={15} color={ladder?.atRisk ? '#ff5c5c' : theme.secondary} />}
+              value={ladder ? `${ladder.level}/${ladder.maxLevel}` : '—'}
+              label="Ladder"
+              accent={ladder?.atRisk ? '#ff5c5c' : theme.secondary}
+              ring={ladder ? ladderPct : undefined}
+              badge={unclaimedRewards}
+              onClick={onOpenLadder}
+            />
+            <ModuleTile
+              icon={<FlameIcon
+                size={15}
+                color={streak > 0 ? '#ff8a3d' : 'rgba(233,224,246,0.26)'}
+                core={streak > 0 ? '#ffd54a' : 'rgba(233,224,246,0.4)'}
+              />}
+              value={streak > 0 ? `${streak}` : '—'}
+              label="Day streak"
+              accent={streak > 0 ? '#ff8a3d' : undefined}
+              onClick={onOpenLadder}
+            />
+          </div>
+
+          <div className="nk-rise" style={{
+            flex: '0 0 auto', padding: '12px 16px 14px', animationDelay: '470ms',
+          }}>
             <div style={{
-              display: 'flex', justifyContent: 'center',
-              marginTop: 12, pointerEvents: 'all',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              fontFamily: BODY, fontSize: 9.5,
             }}>
               <button
                 onClick={openXProfile}
+                aria-label={`Follow ${X_HANDLE}`}
+                className="nk-press-sm"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 7,
-                  padding: '7px 16px', borderRadius: 99,
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.14)',
-                  color: 'rgba(255,255,255,0.75)', cursor: 'pointer',
-                  fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 12,
+                  width: 26, height: 26, borderRadius: '50%', padding: 0, marginRight: 4,
+                  background: 'transparent', border: `1px solid ${RULE}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <XLogoIcon size={13} color="rgba(255,255,255,0.75)" />
-                Follow {X_HANDLE}
+                <XLogoIcon size={11} color={DIM} />
               </button>
-            </div>
-
-            {/* Legal footer */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-              marginTop: 10, pointerEvents: 'all',
-              fontFamily: '"Nunito", system-ui', fontSize: 10,
-            }}>
-              {[
-                { key: 'terms',   label: 'Terms',   action: () => onOpenLegal?.('terms')   },
-                { key: 'privacy', label: 'Privacy', action: () => onOpenLegal?.('privacy') },
-                { key: 'faq',     label: 'FAQ',     action: () => onOpenFAQ?.()            },
-                { key: 'about',   label: 'About',   action: () => onOpenLegal?.('about')   },
-                // Owner-only. Server-enforced — this just saves typing #admin.
-                ...(isAdminWallet(walletAddress)
-                  ? [{ key: 'admin', label: 'Admin', action: () => { window.location.hash = 'admin'; } }]
-                  : []),
-              ].map(({ key, label, action }, i) => (
-                <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {i > 0 && <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>}
+              {legalLinks.map(({ key, label, action }, i) => (
+                <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {i > 0 && <span style={{ color: 'rgba(233,224,246,0.16)' }}>·</span>}
                   <button
                     onClick={action}
                     style={{
-                      background: 'none', border: 'none', padding: '2px 4px',
+                      background: 'none', border: 'none', padding: '2px 1px',
                       fontFamily: 'inherit', fontSize: 'inherit',
-                      color: key === 'admin' ? 'rgba(255,215,0,0.75)' : 'rgba(255,255,255,0.28)',
-                      fontWeight: key === 'admin' ? 800 : 'inherit',
-                      cursor: 'pointer',
-                      textDecoration: 'underline', textUnderlineOffset: 2,
+                      fontWeight: key === 'admin' ? 800 : 600,
+                      color: key === 'admin' ? GOLD : 'rgba(233,224,246,0.26)',
                     }}
                   >
                     {label}

@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { CheckIcon, WarningIcon, CashIcon, GiftIcon } from './Icons.jsx';
+import { Sheet } from './kit.jsx';
+import { INK, DIM, FAINT, RULE, BODY } from '../../theme/tokens.js';
 
 const PURPLE = '#7b2fff';
 const CYAN   = '#00d4ff';
@@ -45,10 +48,12 @@ function ObjectiveBar({ objective }) {
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
         <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
           fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 700,
           color: met ? GREEN : 'rgba(255,255,255,0.72)',
         }}>
-          {met ? '✓ ' : ''}{OBJ_LABEL[key] ?? key}
+          {met && <CheckIcon size={11} color={GREEN} />}
+          {OBJ_LABEL[key] ?? key}
         </span>
         <span style={{
           fontFamily: '"Space Mono", monospace', fontSize: 11, fontWeight: 700,
@@ -115,9 +120,11 @@ function CurrentCard({ ladder }) {
           background: 'rgba(255,92,92,0.1)', border: `1px solid ${RED}55`,
         }}>
           <div style={{
+            display: 'flex', alignItems: 'center', gap: 7,
             fontFamily: '"Nunito", system-ui', fontSize: 11.5, fontWeight: 800, color: RED, marginBottom: 3,
           }}>
-            ⚠ You will drop to level {ladder.level - 1} on Monday
+            <WarningIcon size={13} color={RED} />
+            <span>You will drop to level {ladder.level - 1} on Monday</span>
           </div>
           <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 11, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
             You have not gained a level this week. Clearing this card — even once — protects your rank.
@@ -130,8 +137,12 @@ function CurrentCard({ ladder }) {
           borderRadius: 14, padding: '11px 14px', marginBottom: 14,
           background: 'rgba(46,204,113,0.1)', border: `1px solid ${GREEN}55`,
         }}>
-          <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 11.5, fontWeight: 800, color: GREEN }}>
-            ✓ Rank held — you are at the top of the ladder
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            fontFamily: '"Nunito", system-ui', fontSize: 11.5, fontWeight: 800, color: GREEN,
+          }}>
+            <CheckIcon size={13} color={GREEN} />
+            <span>Rank held — you are at the top of the ladder</span>
           </div>
         </div>
       )}
@@ -226,13 +237,19 @@ function LevelRow({ level }) {
       </div>
 
       <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
         fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 700,
         color: level.reward?.cash ? GOLD : 'rgba(255,255,255,0.55)',
       }}>
-        {level.reward?.cash ? '💵 ' : '🎁 '}{rewardText(level.reward)}
-        {!level.paysReward && (
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}> · already paid</span>
-        )}
+        {level.reward?.cash
+          ? <CashIcon size={12} color={GOLD} />
+          : <GiftIcon size={12} color="rgba(255,255,255,0.55)" />}
+        <span>
+          {rewardText(level.reward)}
+          {!level.paysReward && (
+            <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}> · already paid</span>
+          )}
+        </span>
       </div>
     </div>
   );
@@ -381,100 +398,58 @@ export default function LadderModal({ isOpen, onClose, ladder, levels, rewards }
 
   const unclaimed = rewards?.unclaimedCount ?? 0;
 
-  return (
-    <>
-      <div onClick={onClose} aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'rgba(0,0,0,0.72)' }} />
-
-      <div role="dialog" aria-modal="true" aria-label="Ladder"
-        style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 220,
-          display: 'flex', flexDirection: 'column',
-          height: '90dvh', maxHeight: '90dvh',
-          background: 'linear-gradient(180deg, #110526 0%, #0a0015 100%)',
-          border: '1px solid rgba(123,47,255,0.35)', borderBottom: 'none',
-          borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -12px 48px rgba(123,47,255,0.25)',
-          animation: 'legalSlideUp 280ms cubic-bezier(0.22,1,0.36,1) both',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 20px 12px', flexShrink: 0,
-        }}>
-          <div>
-            <div style={{
-              fontFamily: '"Nunito", system-ui', fontWeight: 900, fontSize: 16, color: '#fff', lineHeight: 1,
-            }}>
-              The Ladder
-            </div>
-            <div style={{
-              marginTop: 3, fontFamily: '"Nunito", system-ui', fontSize: 10,
-              color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase',
-            }}>
-              12 levels · resets Monday UTC
-            </div>
-          </div>
-          <button onClick={onClose} aria-label="Close"
+  const tabs = (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {TABS.map(t => {
+        const active = tab === t.key;
+        return (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className="nk-press-sm"
             style={{
-              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
-              color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: 16, lineHeight: 1,
+              position: 'relative', flex: 1, padding: '8px 6px', borderRadius: 10,
+              background: 'transparent',
+              border: `1px solid ${active ? PURPLE : RULE}`,
+              color: active ? INK : FAINT,
+              fontFamily: BODY, fontSize: 11, fontWeight: 800,
             }}
           >
-            ✕
+            {t.label}
+            {t.key === 'rewards' && unclaimed > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: 4,
+                minWidth: 15, height: 15, borderRadius: '50%', background: GOLD,
+                color: '#08010f', fontSize: 9, fontWeight: 900, lineHeight: '15px',
+              }}>
+                {unclaimed}
+              </span>
+            )}
           </button>
-        </div>
+        );
+      })}
+    </div>
+  );
 
-        {/* Tabs */}
+  return (
+    <Sheet
+      title="The Ladder"
+      subtitle="12 levels · resets Monday UTC"
+      onClose={onClose}
+      belowHeader={tabs}
+    >
+      {!ladder && tab !== 'rewards' && (
         <div style={{
-          display: 'flex', gap: 6, padding: '0 20px 12px', flexShrink: 0,
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          padding: '28px 0', textAlign: 'center',
+          fontFamily: BODY, fontSize: 12, color: FAINT,
         }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              style={{
-                position: 'relative',
-                flex: 1, padding: '8px 6px', borderRadius: 10,
-                background: tab === t.key ? 'rgba(123,47,255,0.22)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${tab === t.key ? PURPLE + '77' : 'rgba(255,255,255,0.08)'}`,
-                color: tab === t.key ? '#fff' : 'rgba(255,255,255,0.5)',
-                fontFamily: '"Nunito", system-ui', fontSize: 11, fontWeight: 800,
-                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              {t.label}
-              {t.key === 'rewards' && unclaimed > 0 && (
-                <span style={{
-                  position: 'absolute', top: 2, right: 4,
-                  minWidth: 15, height: 15, borderRadius: '50%', background: GOLD,
-                  color: '#08010f', fontSize: 9, fontWeight: 900, lineHeight: '15px',
-                }}>
-                  {unclaimed}
-                </span>
-              )}
-            </button>
-          ))}
+          Loading your ladder…
         </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {!ladder && tab !== 'rewards' && (
-            <div style={{
-              padding: '28px 20px', textAlign: 'center',
-              fontFamily: '"Nunito", system-ui', fontSize: 12, color: 'rgba(255,255,255,0.4)',
-            }}>
-              Loading your ladder…
-            </div>
-          )}
-          {ladder && tab === 'week'   && <CurrentCard ladder={ladder} />}
-          {tab === 'ladder' && <LadderMapView levels={levels ?? ladder?.levels} />}
-          {tab === 'rewards' && rewards && <RewardsView rewards={rewards} />}
-          <div style={{ height: 24 }} />
-        </div>
-      </div>
-    </>
+      )}
+      {ladder && tab === 'week'   && <CurrentCard ladder={ladder} />}
+      {tab === 'ladder' && <LadderMapView levels={levels ?? ladder?.levels} />}
+      {tab === 'rewards' && rewards && <RewardsView rewards={rewards} />}
+      <div style={{ height: 24 }} />
+    </Sheet>
   );
 }

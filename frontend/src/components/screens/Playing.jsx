@@ -1,5 +1,7 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { RecordIcon } from '../ui/Icons.jsx';
+import { RecordIcon, TrophyIcon, GemIcon, BoltIcon, PauseIcon } from '../ui/Icons.jsx';
+import { HudPanel } from '../ui/kit.jsx';
+import { INK, DIM, FAINT, RULE, GOLD, GREEN, RED, DISPLAY, BODY, NUM } from '../../theme/tokens.js';
 import CosmicBackground from '../ui/CosmicBackground.jsx';
 import BottomBar        from '../ui/BottomBar.jsx';
 import PowerUpShop      from '../ui/PowerUpShop.jsx';
@@ -58,38 +60,46 @@ function ChainMeter({ chain }) {
       {active ? (
         <>
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
             marginBottom: 5, gap: 8,
           }}>
             <span key={chain.key} style={{
-              fontFamily: '"Nunito", system-ui', fontSize: 12, fontWeight: 900,
-              letterSpacing: '0.1em', color,
-              textShadow: `0 0 12px ${color}`,
+              display: 'inline-flex', alignItems: 'baseline', gap: 5,
+              fontFamily: DISPLAY, fontSize: 14, fontWeight: 600,
+              letterSpacing: '0.08em', color,
+              textShadow: `0 0 14px ${color}`,
               animation: 'nukko-pop .25s ease-out',
             }}>
-              CHAIN ×{multiplier}
+              CHAIN
+              <span style={{ fontFamily: NUM, fontSize: 15, fontWeight: 700 }}>×{multiplier}</span>
             </span>
             <span style={{
-              fontFamily: '"Space Mono", monospace', fontSize: 11, fontWeight: 700,
-              color: 'rgba(255,255,255,0.55)',
+              fontFamily: BODY, fontSize: 8.5, fontWeight: 800,
+              letterSpacing: '0.16em', textTransform: 'uppercase', color: FAINT,
             }}>{chain.count} linked</span>
           </div>
-          <div style={{ position: 'relative', height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.08)' }}>
-            <div style={{
-              position: 'absolute', left: 0, top: 0, bottom: 0,
-              width: `${pct * 100}%`, borderRadius: 99,
-              background: color, boxShadow: `0 0 10px ${color}`,
-            }} />
+          {/* Segmented drain — a bar of cells reads as a gauge, not a loader */}
+          <div style={{ display: 'flex', gap: 2, height: 5 }}>
+            {Array.from({ length: 12 }, (_, i) => {
+              const lit = pct * 12 > i;
+              return (
+                <div key={i} style={{
+                  flex: 1, borderRadius: 1,
+                  background: lit ? color : 'rgba(0,0,0,0.45)',
+                  boxShadow: lit ? `0 0 8px ${color}` : 'none',
+                }} />
+              );
+            })}
           </div>
         </>
       ) : (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%',
-          fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 700,
-          letterSpacing: '0.14em', textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.18)',
+          fontFamily: BODY, fontSize: 9, fontWeight: 800,
+          letterSpacing: '0.18em', textTransform: 'uppercase',
+          color: 'rgba(233,224,246,0.16)',
         }}>
-          merge again quickly to chain
+          merge fast to chain
         </div>
       )}
     </div>
@@ -197,15 +207,17 @@ function GuestTrialExpiredModal({ score, onConnectSocial, onConnectWallet, socia
               Connect to unlock
             </div>
             {[
-              '🏆  Submit score to the global leaderboard',
-              '💎  Earn CELO rewards for every game',
-              '⚡  Bomb & Expand power-ups',
-            ].map(item => (
-              <div key={item} style={{
+              { Icon: TrophyIcon, color: '#ffd700', label: 'Submit score to the global leaderboard' },
+              { Icon: GemIcon,    color: '#00d4ff', label: 'Earn CELO rewards for every game' },
+              { Icon: BoltIcon,   color: '#ffd700', label: 'Bomb & Expand power-ups' },
+            ].map(({ Icon, color, label }) => (
+              <div key={label} style={{
+                display: 'flex', alignItems: 'center', gap: 9,
                 fontFamily: '"Nunito", system-ui', fontSize: 12,
                 color: 'rgba(255,255,255,0.58)', marginBottom: 7, lineHeight: 1.3,
               }}>
-                {item}
+                <Icon size={14} color={color} />
+                <span>{label}</span>
               </div>
             ))}
           </div>
@@ -273,15 +285,6 @@ function GuestTrialExpiredModal({ score, onConnectSocial, onConnectWallet, socia
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-
-function PauseButtonIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="2" y="1.5" width="3.5" height="11" rx="1" fill="rgba(255,255,255,0.8)"/>
-      <rect x="8.5" y="1.5" width="3.5" height="11" rx="1" fill="rgba(255,255,255,0.8)"/>
-    </svg>
-  );
-}
 
 // Must match the H constant in useGame.js
 const H_CANVAS = 480;
@@ -402,9 +405,9 @@ export default function Playing({
       if (idx === null || idx === undefined) return;
       drawFruitOnCtx(ctx, size / 2, size / 2, Math.min(FRUITS[idx].r, maxR), idx, alpha);
     };
-    paint('next-canvas',  nextIdx,     52, 18);
-    paint('next2-canvas', nextNextIdx, 30, 10, 0.75);
-    paint('hold-canvas',  holdIdx,     30, 10, canHold ? 1 : 0.4);
+    paint('next-canvas',  nextIdx,     46, 16);
+    paint('next2-canvas', nextNextIdx, 26,  9, 0.75);
+    paint('hold-canvas',  holdIdx,     26,  9, canHold ? 1 : 0.4);
   }, [nextIdx, nextNextIdx, holdIdx, canHold]);
 
   const getX = useCallback((e) => {
@@ -495,25 +498,25 @@ export default function Playing({
         }}>
 
           {/* ── Top HUD ─────────────────────────────────────────────────────── */}
-          <div style={{ padding: '14px 16px 10px', flexShrink: 0, position: 'relative' }}>
+          <div style={{ padding: '16px 16px 10px', flexShrink: 0, position: 'relative' }}>
 
             {/* Pause button — top-right corner of HUD */}
             <button
               onClick={handlePause}
               disabled={gameOver}
+              className="nk-press-sm"
               style={{
                 position: 'absolute', top: 14, right: 16,
-                width: 32, height: 32, borderRadius: 10,
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.14)',
+                width: 32, height: 32, borderRadius: '50%', padding: 0,
+                background: 'transparent',
+                border: `1px solid ${RULE}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: gameOver ? 'not-allowed' : 'pointer',
                 opacity: gameOver ? 0.35 : 1,
-                WebkitTapHighlightColor: 'transparent',
                 zIndex: 2,
               }}
             >
-              <PauseButtonIcon />
+              <PauseIcon size={13} color={DIM} />
             </button>
 
             {/* 3-column row: Timer | Next | Score */}
@@ -521,8 +524,8 @@ export default function Playing({
               display: 'grid',
               gridTemplateColumns: '1fr auto 1fr',
               alignItems: 'center',
-              gap: 6,
-              paddingRight: 38,  /* leave room for pause button */
+              gap: 8,
+              paddingRight: 44,  /* leave room for pause button */
             }}>
 
               {/* Left: Timer pill + signed time-change pulse.
@@ -532,26 +535,27 @@ export default function Playing({
                 <div
                   key={penalty ? `hit-${timeDelta.key}` : 'idle'}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '6px 11px', borderRadius: 99,
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '6px 11px', borderRadius: 9,
                     background: penalty
-                      ? 'rgba(255,59,59,0.35)'
-                      : urgent ? 'rgba(255,59,59,0.18)' : 'rgba(255,255,255,0.07)',
-                    border: `1px solid ${(penalty || urgent) ? 'rgba(255,59,59,0.7)' : 'rgba(255,255,255,0.11)'}`,
+                      ? 'rgba(255,59,59,0.32)'
+                      : urgent ? 'rgba(255,59,59,0.15)' : 'rgba(0,0,0,0.4)',
+                    border: `1px solid ${(penalty || urgent) ? 'rgba(255,59,59,0.7)' : RULE}`,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
                     animation: penalty
                       ? 'nukko-time-hit 0.7s ease-out'
                       : urgent ? 'nukko-pulse-bg 0.8s ease-in-out infinite' : 'none',
                   }}
                 >
                   <div style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: (penalty || urgent) ? '#ff3b3b' : '#00d4ff',
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: (penalty || urgent) ? '#ff3b3b' : theme.secondary,
                     flexShrink: 0,
-                    boxShadow: (penalty || urgent) ? '0 0 6px #ff3b3b' : '0 0 6px #00d4ff',
+                    boxShadow: `0 0 6px ${(penalty || urgent) ? '#ff3b3b' : theme.secondary}`,
                   }} />
                   <div style={{
-                    fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 18,
-                    color: (penalty || urgent) ? '#ff3b3b' : '#fff', letterSpacing: '-0.02em',
+                    fontFamily: NUM, fontWeight: 700, fontSize: 18,
+                    color: (penalty || urgent) ? '#ff3b3b' : INK, letterSpacing: '-0.03em',
                     fontVariantNumeric: 'tabular-nums',
                   }}>
                     {fmt(remaining)}
@@ -565,9 +569,9 @@ export default function Playing({
                   <div key={timeDelta.key} style={{
                     position: 'absolute', left: '50%', top: penalty ? -10 : -6,
                     transform: 'translateX(-50%)',
-                    fontFamily: '"Space Mono", monospace', fontWeight: 700,
+                    fontFamily: NUM, fontWeight: 700,
                     fontSize: penalty ? 19 : 15,
-                    color: penalty ? '#ff3b3b' : '#00e676',
+                    color: penalty ? '#ff3b3b' : GREEN,
                     textShadow: penalty
                       ? '0 0 16px rgba(255,59,59,1)'
                       : '0 0 12px rgba(0,230,118,0.9)',
@@ -594,67 +598,66 @@ export default function Playing({
                   }}
                 >
                   <div style={{
-                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 8,
-                    color: canHold ? theme.secondary : 'rgba(255,255,255,0.3)',
-                    textTransform: 'uppercase', letterSpacing: '0.16em',
+                    fontFamily: BODY, fontWeight: 800, fontSize: 8,
+                    color: canHold ? theme.secondary : FAINT,
+                    textTransform: 'uppercase', letterSpacing: '0.18em',
                   }}>Hold</div>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: `1px dashed ${canHold ? `rgba(${theme.secondaryRGB},0.5)` : 'rgba(255,255,255,0.12)'}`,
-                    borderRadius: 9, padding: 3,
-                  }}>
-                    <canvas id="hold-canvas" width={30} height={30}
-                      style={{ display: 'block', borderRadius: 6 }} />
-                  </div>
+                  <HudPanel
+                    notch={6}
+                    accent={canHold ? `rgba(${theme.secondaryRGB},0.5)` : RULE}
+                    style={{ width: 'auto' }}
+                    innerStyle={{ padding: 3 }}
+                  >
+                    <canvas id="hold-canvas" width={26} height={26} style={{ display: 'block' }} />
+                  </HudPanel>
                 </button>
 
                 {/* Next */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                   <div style={{
-                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 9,
-                    color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.22em',
+                    fontFamily: BODY, fontWeight: 800, fontSize: 9,
+                    color: DIM, textTransform: 'uppercase', letterSpacing: '0.22em',
                   }}>
                     Next
                   </div>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 12, padding: 4,
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-                  }}>
-                    <canvas id="next-canvas" width={52} height={52}
-                      style={{ display: 'block', borderRadius: 8 }} />
-                  </div>
+                  <HudPanel
+                    notch={9}
+                    accent="rgba(233,224,246,0.34)"
+                    style={{ width: 'auto', boxShadow: `0 4px 18px rgba(0,0,0,0.5)` }}
+                    innerStyle={{ padding: 4 }}
+                  >
+                    <canvas id="next-canvas" width={46} height={46} style={{ display: 'block' }} />
+                  </HudPanel>
                 </div>
 
                 {/* Second lookahead */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                   <div style={{
-                    fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 8,
-                    color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.16em',
+                    fontFamily: BODY, fontWeight: 800, fontSize: 8,
+                    color: 'rgba(233,224,246,0.24)', textTransform: 'uppercase', letterSpacing: '0.18em',
                   }}>After</div>
-                  <div style={{
-                    background: 'rgba(255,255,255,0.035)',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                    borderRadius: 9, padding: 3,
-                  }}>
-                    <canvas id="next2-canvas" width={30} height={30}
-                      style={{ display: 'block', borderRadius: 6 }} />
-                  </div>
+                  <HudPanel
+                    notch={6}
+                    accent={RULE}
+                    style={{ width: 'auto' }}
+                    innerStyle={{ padding: 3 }}
+                  >
+                    <canvas id="next2-canvas" width={26} height={26} style={{ display: 'block' }} />
+                  </HudPanel>
                 </div>
               </div>
 
               {/* Right: Score */}
               <div style={{ textAlign: 'right' }}>
                 <div style={{
-                  fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 9,
-                  color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.22em',
+                  fontFamily: BODY, fontWeight: 800, fontSize: 9,
+                  color: DIM, textTransform: 'uppercase', letterSpacing: '0.22em',
                 }}>
                   Score
                 </div>
                 <div style={{
-                  fontFamily: '"Space Mono", monospace', fontWeight: 700, fontSize: 22,
-                  color: '#ffd700', letterSpacing: '-0.02em', lineHeight: 1,
+                  fontFamily: NUM, fontWeight: 700, fontSize: 23,
+                  color: GOLD, letterSpacing: '-0.03em', lineHeight: 1,
                   fontVariantNumeric: 'tabular-nums',
                 }}>
                   {Number(score).toLocaleString()}
@@ -662,13 +665,13 @@ export default function Playing({
                 {personalBest > 0 && (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3,
-                    fontFamily: '"Nunito", system-ui', fontSize: 10,
-                    color: score > personalBest ? '#00d4ff' : 'rgba(255,255,255,0.28)',
+                    fontFamily: NUM, fontSize: 10,
+                    color: score > personalBest ? theme.secondary : 'rgba(233,224,246,0.26)',
                     fontVariantNumeric: 'tabular-nums',
                     marginTop: 2,
                     transition: 'color 0.4s ease',
                   }}>
-                    {score > personalBest && <RecordIcon size={10} color="#00d4ff" />}
+                    {score > personalBest && <RecordIcon size={10} color={theme.secondary} />}
                     PB {Number(personalBest).toLocaleString()}
                   </div>
                 )}
@@ -681,8 +684,9 @@ export default function Playing({
             {sessionInfo && (
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
-                fontSize: 11, fontWeight: 700, fontFamily: '"Nunito", system-ui',
-                padding: '3px 10px', borderRadius: 20, marginTop: 8,
+                fontSize: 9, fontWeight: 800, fontFamily: BODY,
+                letterSpacing: '0.14em', textTransform: 'uppercase',
+                padding: '4px 10px', borderRadius: 7, marginTop: 8,
                 background: `${sessionInfo.dot}18`,
                 border: `1px solid ${sessionInfo.dot}44`,
                 color: sessionInfo.dot,
@@ -732,8 +736,8 @@ export default function Playing({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               <div style={{
-                fontFamily: '"Nunito", system-ui', fontSize: 12, fontWeight: 700,
-                color: 'rgba(255,255,255,0.28)', textAlign: 'center', lineHeight: 1.4,
+                fontFamily: BODY, fontSize: 12, fontWeight: 700,
+                color: FAINT, textAlign: 'center', lineHeight: 1.4,
               }}>
                 Connect wallet to unlock power-ups &amp; earn CELO
               </div>
@@ -741,8 +745,8 @@ export default function Playing({
           ) : powerUpsEnabled ? (
             <div style={{
               flexShrink: 0,
-              borderTop: `1px solid rgba(${theme.secondaryRGB},0.18)`,
-              background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(8,1,15,0.92) 100%)',
+              borderTop: `1px solid ${RULE}`,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(8,1,15,0.94) 100%)',
               padding: '10px 12px 22px',
             }}>
               <BottomBar

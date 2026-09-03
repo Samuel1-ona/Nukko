@@ -1,83 +1,70 @@
-import Planet from './Planet.jsx';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
-// Gold / silver-blue / bronze — avoids colour-emoji, stays in the cosmic palette
-const RANK_COLORS = {
-  1: '#ffd700',
-  2: '#a8c4d8',
-  3: '#c87941',
+// Podium metals. Everything below third place is deliberately quiet — the
+// point of a standings table is that the top is easy to find.
+const MEDALS = {
+  1: '#ffd54a',
+  2: '#b9c7d6',
+  3: '#cf8a4e',
 };
 
-function LeaderboardRow({ entry, divider, isMe }) {
-  const rankColor = isMe ? '#ffd700' : (RANK_COLORS[entry.rank] ?? 'rgba(255,255,255,0.7)');
+function Row({ entry, isMe, showDate, last }) {
+  const medal = MEDALS[entry.rank];
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '12px 14px',
-      background: isMe
-        ? 'linear-gradient(90deg, rgba(255,215,0,0.15), rgba(255,215,0,0.02))'
-        : 'transparent',
-      borderBottom: divider ? '1px solid rgba(255,255,255,0.05)' : 'none',
       position: 'relative',
+      display: 'grid',
+      gridTemplateColumns: showDate ? '30px 1fr auto 62px' : '30px 1fr auto',
+      alignItems: 'center',
+      columnGap: 12,
+      padding: '11px 4px 11px 12px',
+      borderBottom: last ? 'none' : '1px solid rgba(190,170,225,0.09)',
+      background: isMe ? 'rgba(255,213,74,0.07)' : 'transparent',
     }}>
-      {/* "me" left accent bar */}
       {isMe && (
         <div style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-          background: '#ffd700', borderRadius: '0 2px 2px 0',
+          position: 'absolute', left: 0, top: 6, bottom: 6, width: 2,
+          background: '#ffd54a', borderRadius: 2,
         }} />
       )}
 
-      {/* Rank — top-3 get a coloured filled pill, rest are plain numbers */}
       <div style={{
-        width: 28, textAlign: 'center', flexShrink: 0,
-        fontFamily: '"Space Mono", monospace',
-        fontSize: entry.rank <= 3 ? 12 : 13,
-        fontWeight: 700,
-        color: rankColor,
+        fontFamily: '"Space Mono", monospace', fontSize: 12, fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        color: medal ?? 'rgba(233,224,246,0.32)',
+        letterSpacing: '-0.02em',
       }}>
-        {entry.rank <= 3 ? (
+        {String(entry.rank).padStart(2, '0')}
+      </div>
+
+      <div style={{
+        minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        fontFamily: '"Nunito", system-ui',
+        fontSize: 14, fontWeight: isMe ? 800 : 600,
+        color: isMe ? '#fff' : 'rgba(233,224,246,0.82)',
+      }}>
+        {entry.username || 'anon'}
+        {isMe && (
           <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 22, height: 22, borderRadius: '50%',
-            background: `${rankColor}1a`,
-            border: `1px solid ${rankColor}55`,
-            fontSize: 11,
-          }}>
-            {entry.rank}
-          </span>
-        ) : (
-          entry.rank
+            marginLeft: 7, fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
+            color: '#ffd54a', verticalAlign: 'middle',
+          }}>YOU</span>
         )}
       </div>
 
-      {/* Planet avatar */}
-      <Planet stage={Math.min(11, Math.max(1, Math.ceil(entry.rank * 0.8)))} size={22} />
-
-      {/* Name */}
-      <div style={{
-        flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        fontFamily: '"Nunito", system-ui', fontSize: 14,
-        fontWeight: isMe ? 700 : 500,
-        color: isMe ? '#fff' : 'rgba(255,255,255,0.85)',
-      }}>
-        {entry.username}
-      </div>
-
-      {/* Score */}
       <div style={{
         fontFamily: '"Space Mono", monospace', fontVariantNumeric: 'tabular-nums',
-        fontSize: 13, fontWeight: 700, color: isMe ? '#ffd700' : '#fff',
-        flexShrink: 0,
+        fontSize: 13, fontWeight: 700,
+        color: isMe ? '#ffd54a' : 'rgba(246,241,251,0.92)',
       }}>
         {Number(entry.score).toLocaleString()}
       </div>
 
-      {/* Date */}
-      {entry.date && (
+      {showDate && (
         <div style={{
-          width: 40, textAlign: 'right', flexShrink: 0,
-          fontFamily: '"Nunito", system-ui', fontSize: 11,
-          color: 'rgba(255,255,255,0.4)',
+          textAlign: 'right',
+          fontFamily: '"Nunito", system-ui', fontSize: 10.5,
+          color: 'rgba(233,224,246,0.3)',
         }}>
           {entry.date}
         </div>
@@ -86,41 +73,61 @@ function LeaderboardRow({ entry, divider, isMe }) {
   );
 }
 
-export default function Leaderboard({ entries, loading, myUsername }) {
-  if (loading && entries.length === 0) {
-    return (
-      <div style={{
-        textAlign: 'center', padding: '20px',
-        fontFamily: '"Nunito", system-ui', fontSize: 13,
-        color: 'rgba(255,255,255,0.4)',
-      }}>
-        Loading leaderboard…
-      </div>
-    );
-  }
-  if (entries.length === 0) {
-    return (
-      <div style={{
-        textAlign: 'center', padding: '20px',
-        fontFamily: '"Nunito", system-ui', fontSize: 13,
-        color: 'rgba(255,255,255,0.4)',
-      }}>
-        No scores yet — be the first.
-      </div>
-    );
-  }
+function Empty({ children }) {
   return (
     <div style={{
-      borderRadius: 16, overflow: 'hidden',
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.06)',
+      padding: '22px 12px', textAlign: 'center',
+      fontFamily: '"Nunito", system-ui', fontSize: 12.5,
+      color: 'rgba(233,224,246,0.38)', lineHeight: 1.5,
     }}>
+      {children}
+    </div>
+  );
+}
+
+export default function Leaderboard({ entries = [], loading, myUsername, showDate = false }) {
+  const { theme } = useTheme();
+
+  if (loading && entries.length === 0) {
+    // Skeleton rows rather than a spinner — the table's shape is the loader.
+    return (
+      <div>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '11px 4px 11px 12px',
+            borderBottom: i < 3 ? '1px solid rgba(190,170,225,0.09)' : 'none',
+          }}>
+            <div style={{ width: 18, height: 9, borderRadius: 3, background: 'rgba(233,224,246,0.09)' }} />
+            <div style={{
+              flex: 1, height: 9, borderRadius: 3,
+              background: 'rgba(233,224,246,0.07)', maxWidth: 60 + i * 34,
+            }} />
+            <div style={{ width: 44, height: 9, borderRadius: 3, background: 'rgba(233,224,246,0.09)' }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <Empty>
+        Nobody has posted a score yet.<br />
+        <span style={{ color: theme.secondary, fontWeight: 700 }}>Play one run and the top spot is yours.</span>
+      </Empty>
+    );
+  }
+
+  return (
+    <div>
       {entries.map((e, i) => (
-        <LeaderboardRow
-          key={e.rank}
+        <Row
+          key={e.rank ?? `${e.username}-${i}`}
           entry={e}
-          divider={i < entries.length - 1}
-          isMe={myUsername && e.username === myUsername}
+          isMe={Boolean(myUsername) && e.username === myUsername}
+          showDate={showDate}
+          last={i === entries.length - 1}
         />
       ))}
     </div>

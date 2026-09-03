@@ -1,20 +1,83 @@
 import { useState } from 'react';
-import CosmicBackground from '../ui/CosmicBackground.jsx';
-import BackChevron      from '../ui/BackChevron.jsx';
-import Planet            from '../ui/Planet.jsx';
-import { LockIcon }      from '../ui/Icons.jsx';
-import { useTheme }      from '../../theme/ThemeContext.jsx';
+import Planet from '../ui/Planet.jsx';
+import { LockIcon, PlayIcon } from '../ui/Icons.jsx';
+import { Screen, ScreenHeader, SectionHead, PrimaryButton, Reveal } from '../ui/kit.jsx';
+import { INK, DIM, FAINT, RULE, DISPLAY, BODY, NUM } from '../../theme/tokens.js';
+import { useTheme } from '../../theme/ThemeContext.jsx';
 
 const MODES = [
-  { id: 'merge',  name: 'Merge Cosmos',  desc: 'Drop, merge, evolve — the original', stage: 9, live: true },
-  { id: 'orbit',  name: 'Orbit Rush',    desc: 'Race the clock through asteroid fields', stage: 4, live: false },
+  { id: 'merge',  name: 'Merge Cosmos',  desc: 'Drop, merge, evolve — the original',        stage: 9, live: true },
+  { id: 'orbit',  name: 'Orbit Rush',    desc: 'Race the clock through asteroid fields',    stage: 4, live: false },
   { id: 'puzzle', name: 'Nebula Puzzle', desc: 'Match cosmic patterns before they collapse', stage: 8, live: false },
 ];
 
-export default function ModeSelect({ onBack, onSelectMerge }) {
+function ModeRow({ mode, shaking, selected, onSelect, delay }) {
   const { theme } = useTheme();
+  const accent = mode.live ? (selected ? theme.primary : RULE) : RULE;
+
+  return (
+    <Reveal delay={delay}>
+      <button
+        onClick={onSelect}
+        className="nk-press"
+        style={{
+          display: 'block', width: '100%', textAlign: 'left',
+          padding: '14px 0 14px 16px', marginBottom: 4,
+          background: 'none', border: 'none',
+          borderLeft: `2px solid ${accent}`,
+          opacity: mode.live ? 1 : 0.5,
+          animation: shaking ? 'nukko-badge-shake 0.4s ease-in-out' : 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            flexShrink: 0,
+            filter: mode.live ? 'none' : 'grayscale(0.85) brightness(0.6)',
+          }}>
+            <Planet stage={mode.stage} size={40} glow={mode.live} />
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: DISPLAY, fontWeight: 600, fontSize: 17, color: INK,
+              }}>
+                {mode.name}
+              </span>
+              {!mode.live && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontFamily: BODY, fontSize: 8.5, fontWeight: 800, letterSpacing: '0.14em',
+                  color: FAINT,
+                }}>
+                  <LockIcon size={9} color={FAINT} /> SOON
+                </span>
+              )}
+            </div>
+            <div style={{ marginTop: 2, fontFamily: BODY, fontSize: 12, color: DIM }}>
+              {mode.desc}
+            </div>
+          </div>
+
+          {mode.live && selected && (
+            <div style={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              background: theme.primary,
+              boxShadow: `0 0 8px ${theme.primary}`,
+            }} />
+          )}
+        </div>
+      </button>
+    </Reveal>
+  );
+}
+
+export default function ModeSelect({ onBack, onSelectMerge }) {
   const [toast, setToast] = useState(null);
   const [shake, setShake] = useState(null);
+  // Only one mode ships today, but the screen is titled "Choose a mode" — so
+  // the rows select and the button commits, rather than both doing the same job.
+  const [selected, setSelected] = useState('merge');
 
   function tapLocked(id) {
     setShake(id);
@@ -24,78 +87,44 @@ export default function ModeSelect({ onBack, onSelectMerge }) {
   }
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#0a0015' }}>
-      <CosmicBackground intensity="medium">
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '18px 20px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <BackChevron onClick={onBack} />
-            <div style={{ fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 21, color: '#fff' }}>
-              Choose a mode
-            </div>
-          </div>
-          <div style={{
-            marginTop: 6, marginLeft: 54, fontFamily: '"Nunito", system-ui', fontSize: 13,
-            color: 'rgba(255,255,255,0.6)',
-          }}>
-            More cosmic ways to play are on the way
-          </div>
+    <Screen intensity="medium">
+      <ScreenHeader
+        title="Choose a mode"
+        subtitle="More cosmic ways to play are on the way"
+        onBack={onBack}
+      />
 
-          <div style={{ flex: 1, overflow: 'auto', marginTop: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {MODES.map(m => (
-              <div key={m.id}
-                onClick={() => m.live ? onSelectMerge() : tapLocked(m.id)}
-                style={{
-                  position: 'relative', borderRadius: 22, padding: '18px 18px',
-                  display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
-                  background: m.live
-                    ? `linear-gradient(135deg, rgba(${theme.primaryRGB},0.22), rgba(${theme.secondaryRGB},0.14))`
-                    : 'rgba(255,255,255,0.03)',
-                  border: `1.5px solid ${m.live ? `rgba(${theme.primaryRGB},0.45)` : 'rgba(255,255,255,0.08)'}`,
-                  opacity: m.live ? 1 : 0.68,
-                  animation: shake === m.id ? 'nukko-badge-shake 0.4s ease-in-out' : 'none',
-                  boxShadow: m.live ? `0 12px 30px -12px rgba(${theme.primaryRGB},0.5)` : 'none',
-                }}>
-                <div style={{
-                  width: 62, height: 62, borderRadius: 16, flexShrink: 0,
-                  background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  filter: m.live ? 'none' : 'grayscale(0.7) brightness(0.7)',
-                }}>
-                  <Planet stage={m.stage} size={44} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 17, color: '#fff' }}>{m.name}</div>
-                    {m.live ? (
-                      <span style={{
-                        fontFamily: '"Space Mono", monospace', fontSize: 9, fontWeight: 700, letterSpacing: '0.14em',
-                        color: '#00e676', background: 'rgba(0,230,118,0.14)', border: '1px solid rgba(0,230,118,0.4)',
-                        padding: '2px 7px', borderRadius: 99,
-                      }}>LIVE</span>
-                    ) : (
-                      <span style={{
-                        fontFamily: '"Space Mono", monospace', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-                        color: 'rgba(255,255,255,0.7)', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)',
-                        padding: '2px 7px', borderRadius: 99, display: 'inline-flex', alignItems: 'center', gap: 4,
-                      }}><LockIcon size={10} color="rgba(255,255,255,0.7)" /> SOON</span>
-                    )}
-                  </div>
-                  <div style={{ marginTop: 4, fontFamily: '"Nunito", system-ui', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>{m.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div style={{ flex: '1 1 auto', overflowY: 'auto', marginTop: 22 }}>
+        <SectionHead delay={60}>Modes</SectionHead>
+        {MODES.map((m, i) => (
+          <ModeRow
+            key={m.id}
+            mode={m}
+            shaking={shake === m.id}
+            selected={selected === m.id}
+            delay={80 + i * 50}
+            onSelect={() => (m.live ? setSelected(m.id) : tapLocked(m.id))}
+          />
+        ))}
+      </div>
+
+      <Reveal delay={240} style={{ flex: '0 0 auto', paddingTop: 12 }}>
+        <PrimaryButton onClick={onSelectMerge} icon={<PlayIcon size={13} />}>
+          Play {MODES.find(m => m.id === selected)?.name ?? 'Merge Cosmos'}
+        </PrimaryButton>
+      </Reveal>
+
+      {toast && (
+        <div style={{
+          position: 'absolute', left: '50%', bottom: 92, transform: 'translateX(-50%)',
+          padding: '9px 16px', borderRadius: 99,
+          background: 'rgba(20,6,38,0.9)', border: `1px solid ${RULE}`,
+          color: INK, fontFamily: BODY, fontWeight: 700, fontSize: 12.5,
+          animation: 'nukko-toast .3s ease-out', whiteSpace: 'nowrap',
+        }}>
+          {toast}
         </div>
-
-        {toast && (
-          <div style={{
-            position: 'absolute', left: '50%', bottom: 40, transform: 'translateX(-50%)',
-            padding: '10px 18px', borderRadius: 99,
-            background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-            color: '#fff', fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 13,
-            backdropFilter: 'blur(8px)', animation: 'nukko-toast .3s ease-out', whiteSpace: 'nowrap',
-          }}>{toast}</div>
-        )}
-      </CosmicBackground>
-    </div>
+      )}
+    </Screen>
   );
 }

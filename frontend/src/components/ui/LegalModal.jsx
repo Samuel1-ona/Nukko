@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { Sheet } from './kit.jsx';
+import { INK, DIM, FAINT, RULE, BODY, DISPLAY } from '../../theme/tokens.js';
 import { useTheme } from '../../theme/ThemeContext.jsx';
 
 const SUPPORT_EMAIL = 'studioscracked@gmail.com';
@@ -9,9 +11,9 @@ const ABOUT_URL     = 'https://crackedstudios.xyz';
 function H2({ children }) {
   return (
     <h2 style={{
-      fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 12,
-      textTransform: 'uppercase', letterSpacing: '0.12em',
-      color: '#fff', marginTop: 22, marginBottom: 6,
+      fontFamily: DISPLAY, fontWeight: 600, fontSize: 11,
+      textTransform: 'uppercase', letterSpacing: '0.2em',
+      color: FAINT, marginTop: 24, marginBottom: 8,
     }}>
       {children}
     </h2>
@@ -21,8 +23,8 @@ function H2({ children }) {
 function P({ children }) {
   return (
     <p style={{
-      fontFamily: '"Nunito", system-ui', fontSize: 12.5, lineHeight: 1.7,
-      color: 'rgba(255,255,255,0.62)', marginBottom: 10,
+      fontFamily: BODY, fontSize: 12.5, lineHeight: 1.75,
+      color: DIM, marginBottom: 10,
     }}>
       {children}
     </p>
@@ -35,10 +37,13 @@ function Ul({ items }) {
       {items.map((item, i) => (
         <li key={i} style={{
           display: 'flex', gap: 8, marginBottom: 6,
-          fontFamily: '"Nunito", system-ui', fontSize: 12.5, lineHeight: 1.7,
-          color: 'rgba(255,255,255,0.62)',
+          fontFamily: BODY, fontSize: 12.5, lineHeight: 1.75,
+          color: DIM,
         }}>
-          <span style={{ color: '#a78bff', flexShrink: 0, marginTop: 2, fontSize: 8 }}>■</span>
+          <span style={{
+            width: 5, height: 5, borderRadius: 1, background: '#a78bff',
+            flexShrink: 0, marginTop: 8,
+          }} />
           <span>{item}</span>
         </li>
       ))}
@@ -64,16 +69,6 @@ function Strong({ children }) {
 
 // ── Close icon ───────────────────────────────────────────────────────────────
 
-function CloseIcon() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
 function ExternalIcon() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none"
@@ -88,28 +83,20 @@ function ExternalIcon() {
 // ── Scroll wrapper ───────────────────────────────────────────────────────────
 
 function ScrollBody({ pdfHref, children }) {
+  // The Sheet owns scrolling; this only appends the download affordance.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <div style={{
-        flex: 1, overflowY: 'auto', padding: '6px 20px 16px',
-        WebkitOverflowScrolling: 'touch',
-      }}>
-        {children}
-      </div>
-      <div style={{
-        flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)',
-        padding: '10px 20px',
-        background: 'rgba(255,255,255,0.03)',
-      }}>
+    <div>
+      {children}
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${RULE}` }}>
         <a href={pdfHref} target="_blank" rel="noopener noreferrer"
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            fontFamily: '"Nunito", system-ui', fontSize: 10, fontWeight: 700,
-            textTransform: 'uppercase', letterSpacing: '0.14em',
-            color: 'rgba(255,255,255,0.35)', textDecoration: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            fontFamily: BODY, fontSize: 9.5, fontWeight: 800,
+            textTransform: 'uppercase', letterSpacing: '0.18em',
+            color: FAINT, textDecoration: 'none',
           }}
         >
-          <ExternalIcon /> DOWNLOAD PDF
+          <ExternalIcon /> Download PDF
         </a>
       </div>
     </div>
@@ -481,83 +468,16 @@ export default function LegalModal({ type, onClose }) {
   const meta = MODAL_META[type];
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        aria-hidden="true"
-        style={{
-          position: 'fixed', inset: 0, zIndex: 210,
-          background: 'rgba(0,0,0,0.72)',
-        }}
-      />
-
-      {/* Panel */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={meta.title}
-        style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 220,
-          display: 'flex', flexDirection: 'column',
-          height: type === 'about' ? 'auto' : '90dvh',
-          maxHeight: '90dvh',
-          background: 'linear-gradient(180deg, #110526 0%, #0a0015 100%)',
-          border: `1px solid rgba(${theme.primaryRGB},0.35)`,
-          borderBottom: 'none',
-          borderRadius: '20px 20px 0 0',
-          boxShadow: `0 -12px 48px rgba(${theme.primaryRGB},0.25)`,
-          animation: 'legalSlideUp 280ms cubic-bezier(0.22,1,0.36,1) both',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          flexShrink: 0,
-        }}>
-          <div>
-            <div style={{
-              fontFamily: '"Nunito", system-ui', fontWeight: 900, fontSize: 16,
-              color: '#fff', letterSpacing: '-0.01em', lineHeight: 1,
-            }}>
-              {meta.title}
-            </div>
-            <div style={{
-              marginTop: 3, fontFamily: '"Nunito", system-ui', fontSize: 10,
-              color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase',
-            }}>
-              {meta.subtitle}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(255,255,255,0.07)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
-            }}
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {/* Body */}
-        {type === 'about'   ? <AboutBody onClose={onClose} /> :
-         type === 'terms'   ? <ScrollBody pdfHref={meta.pdfHref}><TermsContent /></ScrollBody> :
-                              <ScrollBody pdfHref={meta.pdfHref}><PrivacyContent /></ScrollBody>}
-      </div>
-
-      <style>{`
-        @keyframes legalSlideUp {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-      `}</style>
-    </>
+    <Sheet
+      title={meta.title}
+      subtitle={meta.subtitle}
+      onClose={onClose}
+      height={type === 'about' ? 'auto' : '90dvh'}
+      zIndex={210}
+    >
+      {type === 'about'   ? <AboutBody onClose={onClose} /> :
+       type === 'terms'   ? <ScrollBody pdfHref={meta.pdfHref}><TermsContent /></ScrollBody> :
+                            <ScrollBody pdfHref={meta.pdfHref}><PrivacyContent /></ScrollBody>}
+    </Sheet>
   );
 }

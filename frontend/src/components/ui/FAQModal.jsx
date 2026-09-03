@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useTheme } from '../../theme/ThemeContext.jsx';
+import { Sheet, PrimaryButton } from './kit.jsx';
+import { ChevronRightIcon } from './Icons.jsx';
+import { INK, DIM, FAINT, RULE, BODY } from '../../theme/tokens.js';
 
 const SUPPORT_EMAIL = 'studioscracked@gmail.com';
 
@@ -60,67 +62,47 @@ const FAQ_ITEMS = [
 
 // ── Accordion row ────────────────────────────────────────────────────────────
 
-function FAQRow({ item, isOpen, onToggle }) {
-  const { theme } = useTheme();
+function FAQRow({ item, isOpen, onToggle, last }) {
   return (
-    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+    <div style={{ borderBottom: last ? 'none' : `1px solid ${RULE}` }}>
       <button
         onClick={onToggle}
+        className="nk-press"
         style={{
           display: 'flex', width: '100%', alignItems: 'flex-start',
           justifyContent: 'space-between', gap: 12,
-          padding: '14px 20px', textAlign: 'left', background: 'none', border: 'none',
-          cursor: 'pointer',
-          backgroundColor: isOpen ? `rgba(${theme.primaryRGB},0.08)` : 'transparent',
+          padding: '14px 0', textAlign: 'left', background: 'none', border: 'none',
         }}
       >
         <span style={{
-          fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 12.5,
-          color: '#fff', lineHeight: 1.5, letterSpacing: '0.01em',
+          fontFamily: BODY, fontWeight: 700, fontSize: 13,
+          color: isOpen ? INK : 'rgba(233,224,246,0.82)', lineHeight: 1.5,
         }}>
           {item.q}
         </span>
         <span style={{
-          flexShrink: 0, marginTop: 1,
-          fontFamily: '"Nunito", system-ui', fontWeight: 700, fontSize: 18,
-          color: 'rgba(255,255,255,0.4)', lineHeight: 1,
-          transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
-          transition: 'transform 180ms ease',
-          display: 'inline-block',
+          flexShrink: 0, marginTop: 2, display: 'flex',
+          transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+          transition: 'transform 200ms cubic-bezier(0.16,1,0.3,1)',
         }}>
-          +
+          <ChevronRightIcon size={13} color={FAINT} />
         </span>
       </button>
       {isOpen && (
-        <div style={{ padding: '0 20px 14px' }}>
-          <p style={{
-            fontFamily: '"Nunito", system-ui', fontSize: 12.5, lineHeight: 1.7,
-            color: 'rgba(255,255,255,0.58)', margin: 0,
-          }}>
-            {item.a}
-          </p>
-        </div>
+        <p style={{
+          margin: '0 0 14px', paddingRight: 24,
+          fontFamily: BODY, fontSize: 12.5, lineHeight: 1.75, color: DIM,
+        }}>
+          {item.a}
+        </p>
       )}
     </div>
-  );
-}
-
-// ── Close icon ───────────────────────────────────────────────────────────────
-
-function CloseIcon() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
   );
 }
 
 // ── Main modal ───────────────────────────────────────────────────────────────
 
 export default function FAQModal({ isOpen, onClose }) {
-  const { theme } = useTheme();
   const [openIndex, setOpenIndex] = useState(null);
 
   const toggle = (i) => setOpenIndex((prev) => (prev === i ? null : i));
@@ -144,109 +126,22 @@ export default function FAQModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        aria-hidden="true"
-        style={{
-          position: 'fixed', inset: 0, zIndex: 210,
-          background: 'rgba(0,0,0,0.72)',
-        }}
-      />
+    <Sheet title="Help & FAQ" subtitle="Common questions answered" onClose={onClose}>
+      {FAQ_ITEMS.map((item, i) => (
+        <FAQRow
+          key={i}
+          item={item}
+          isOpen={openIndex === i}
+          onToggle={() => toggle(i)}
+          last={i === FAQ_ITEMS.length - 1}
+        />
+      ))}
 
-      {/* Panel */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Help & FAQ"
-        style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 220,
-          display: 'flex', flexDirection: 'column',
-          height: '90dvh', maxHeight: '90dvh',
-          background: 'linear-gradient(180deg, #110526 0%, #0a0015 100%)',
-          border: `1px solid rgba(${theme.primaryRGB},0.35)`,
-          borderBottom: 'none',
-          borderRadius: '20px 20px 0 0',
-          boxShadow: `0 -12px 48px rgba(${theme.primaryRGB},0.25)`,
-          animation: 'legalSlideUp 280ms cubic-bezier(0.22,1,0.36,1) both',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          flexShrink: 0,
-        }}>
-          <div>
-            <div style={{
-              fontFamily: '"Nunito", system-ui', fontWeight: 900, fontSize: 16,
-              color: '#fff', letterSpacing: '-0.01em', lineHeight: 1,
-            }}>
-              Help &amp; FAQ
-            </div>
-            <div style={{
-              marginTop: 3, fontFamily: '"Nunito", system-ui', fontSize: 10,
-              color: 'rgba(255,255,255,0.35)', letterSpacing: '0.12em', textTransform: 'uppercase',
-            }}>
-              Common questions answered
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(255,255,255,0.07)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
-            }}
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {/* Scrollable FAQ list */}
-        <div style={{
-          flex: 1, overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch',
-        }}>
-          {FAQ_ITEMS.map((item, i) => (
-            <FAQRow
-              key={i}
-              item={item}
-              isOpen={openIndex === i}
-              onToggle={() => toggle(i)}
-            />
-          ))}
-
-          {/* Support CTA */}
-          <div style={{ padding: '20px' }}>
-            <a
-              href={`mailto:${SUPPORT_EMAIL}`}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                height: 50, borderRadius: 14, textDecoration: 'none',
-                background: theme.gradient,
-                fontFamily: '"Nunito", system-ui', fontWeight: 800, fontSize: 13,
-                color: '#fff', letterSpacing: '0.04em',
-                boxShadow: `0 8px 24px -6px rgba(${theme.primaryRGB},0.5)`,
-              }}
-            >
-              Contact Support
-            </a>
-          </div>
-        </div>
+      <div style={{ marginTop: 20 }}>
+        <a href={`mailto:${SUPPORT_EMAIL}`} style={{ textDecoration: 'none', display: 'block' }}>
+          <PrimaryButton height={48}>Contact support</PrimaryButton>
+        </a>
       </div>
-
-      <style>{`
-        @keyframes legalSlideUp {
-          from { transform: translateY(100%); opacity: 0; }
-          to   { transform: translateY(0);    opacity: 1; }
-        }
-      `}</style>
-    </>
+    </Sheet>
   );
 }
