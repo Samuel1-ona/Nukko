@@ -155,15 +155,20 @@ export default function App() {
   // whatever is left. Proportional, so it needs no guest-trial special case —
   // a 25s trial and a 90s run both lose exactly half. Returns the seconds taken
   // so the canvas FX and the clock pulse can name the number.
-  const handleCollapse = useCallback(() => {
+  const handleCollapse = useCallback((breachesLeft = 0) => {
     const lost = halveTime();
-    showToast(`Collapse — time halved, −${lost}s`, 2400);
+    // Naming what is left turns the cap into something the player can plan
+    // around rather than a rule they only discover by dying to it.
+    const tail = breachesLeft > 0
+      ? ` · ${breachesLeft} breach${breachesLeft === 1 ? '' : 'es'} left`
+      : ' · next breach ends the run';
+    showToast(`Collapse — time halved, −${lost}s${tail}`, 2400);
     return lost;
   }, [halveTime, showToast]);
 
   const {
     canvasRef, nextIdx, nextNextIdx, holdIdx, canHold, chain, timeDelta,
-    gameOver, containerWidth,
+    gameOver, containerWidth, collapsesUsed, collapseLimit,
     startEngine, dropFruit, swapHold, movePointer, stopEngine,
     pauseEngine, resumeEngine,
     activateBomb, expandContainer, triggerTimeFX,
@@ -701,6 +706,8 @@ export default function App() {
           movePointer={movePointer}
           dropFruit={dropFruit}
           gameOver={gameOver}
+          collapsesUsed={collapsesUsed}
+          collapseLimit={collapseLimit}
           isGuestMode={isGuestMode}
           guestTrialExpired={guestTrialExpired}
           onConnectWallet={connect}

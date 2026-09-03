@@ -29,6 +29,38 @@ function chainColor(count) {
 }
 
 /**
+ * Remaining collapse budget. Three breaches of the danger line cost time; the
+ * fourth ends the run, so the count has to be on screen — a fail state the
+ * player cannot see is one they can only learn by losing to it.
+ */
+function BreachPips({ used, limit }) {
+  const left = Math.max(0, limit - used);
+  const critical = left === 0;
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: 3 }}
+      title={critical ? 'Next breach ends the run' : `${left} breach${left === 1 ? '' : 'es'} left`}
+    >
+      {Array.from({ length: limit }, (_, i) => {
+        const spent = i < used;
+        return (
+          <span
+            key={i}
+            className={critical ? 'nk-motion' : undefined}
+            style={{
+              width: 5, height: 9, borderRadius: 1.5,
+              background: spent ? 'rgba(233,224,246,0.14)' : RED,
+              boxShadow: spent ? 'none' : `0 0 6px ${RED}99`,
+              animation: critical ? 'nukko-danger 0.9s ease-in-out infinite' : 'none',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Live chain meter. Chains used to be an invisible 450ms accident — you cannot
  * build mastery around a window you can't see, so this draws the remaining time
  * as a draining bar and names the multiplier you're currently riding.
@@ -351,6 +383,8 @@ export default function Playing({
   movePointer,
   dropFruit,
   gameOver,
+  collapsesUsed = 0,
+  collapseLimit = 3,
   isGuestMode,
   guestTrialExpired,
   onConnectWallet,
@@ -565,6 +599,19 @@ export default function Playing({
                 {/* Signed pulse: green when a big merge buys time, red when a
                     collapse takes it. Same slot so the clock is the one place
                     the player learns to watch. */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5, marginTop: 5, paddingLeft: 2,
+                }}>
+                  <BreachPips used={collapsesUsed} limit={collapseLimit} />
+                  <span style={{
+                    fontFamily: BODY, fontSize: 7.5, fontWeight: 800,
+                    letterSpacing: '0.14em', textTransform: 'uppercase',
+                    color: collapsesUsed >= collapseLimit ? RED : FAINT,
+                  }}>
+                    {collapsesUsed >= collapseLimit ? 'Final' : 'Breaches'}
+                  </span>
+                </div>
+
                 {timeDelta && deltaLive && (
                   <div key={timeDelta.key} style={{
                     position: 'absolute', left: '50%', top: penalty ? -10 : -6,

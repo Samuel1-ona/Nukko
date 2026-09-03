@@ -23,6 +23,10 @@ const FAQ_ITEMS = [
     a: 'If you reject at game start, you are returned to the home screen. If you reject at game over, your score will not appear on the leaderboard. The game will still show your score locally, but it will not be saved on-chain.',
   },
   {
+    q: 'What happens if planets reach the red line?',
+    a: 'A planet left resting above the red line causes a collapse: the top of your stack is vaporised and your remaining time is halved. You get three collapses per run — the fourth time planets breach the line, the run ends. The counter next to the clock shows how many you have left.',
+  },
+  {
     q: 'How do merges give me extra time?',
     a: 'Every successful merge awards bonus seconds: small merges give +2 s, mid-tier merges randomly give +2 s or +5 s, and high-tier merges always give +5 s. Chaining fast merges is the best way to keep your session alive.',
   },

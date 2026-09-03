@@ -24,13 +24,18 @@ const CHAIN_MAX        = 6;    // multiplier cap (was 8, when chains were unreac
 const CHAIN_SLOPE      = 0.4;  // multiplier = 1 + (chain - 1) * SLOPE → 3.0x at cap
 
 // ── Gravity Well Collapse ─────────────────────────────────────────────────────
-// Breaching the danger line costs time instead of ending the run, which makes
-// the timer the single fail state and turns the line into a risk/reward dial:
-// stack high for merge opportunities, or stay low and keep your clock.
-// The time cost is a *halving* of whatever is left (see useTimer.halveTime),
-// not a flat subtraction — proportional punishment that scales with the run.
+// Breaching the danger line costs time rather than ending the run outright,
+// which turns the line into a risk/reward dial: stack high for merge
+// opportunities, or stay low and keep your clock. The time cost is a *halving*
+// of whatever is left (see useTimer.halveTime), not a flat subtraction —
+// proportional punishment that scales with the run.
+//
+// That budget is finite. Three collapses is the whole allowance; the fourth
+// breach ends the run. Without a cap a player could ride the line forever,
+// since halving never reaches zero — the run only ended when patience did.
 const COLLAPSE_VAPORIZE  = 4;    // planets removed from the top of the stack
 const COLLAPSE_IMMUNITY  = 1500; // ms — lets debris settle before re-arming
+const COLLAPSE_LIMIT     = 3;    // time slashes allowed; the next breach is fatal
 
 // ── Landing preview helper ────────────────────────────────────────────────────
 // Returns the Y coordinate where a falling fruit of radius `fruitR` centred at
@@ -155,6 +160,9 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
   const [holdIdx,        setHoldIdx]        = useState(null);
   const [canHold,        setCanHold]        = useState(true);
   const [gameOver,       setGameOver]       = useState(false);
+  // Mirrors collapseCountRef so the HUD can render the remaining budget —
+  // a limit the player cannot see is a limit they cannot play around.
+  const [collapsesUsed,  setCollapsesUsed]  = useState(0);
   const [containerWidth, setContainerWidth] = useState(BASE_W);
   // Small "+Ns" pulse beside the clock when a merge grants time
   // Signed time change to pulse beside the clock: + from a big merge, − from a
@@ -867,6 +875,16 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
       collapsePendingRef.current = false;
       if (!still) return;
 
+      // Budget spent: this breach ends the run instead of costing more time.
+      if (collapseCountRef.current >= COLLAPSE_LIMIT) {
+        gameOverRef.current = true;
+        setGameOver(true);
+        audioRef.current?.stopDanger?.();
+        audioRef.current?.playCollapse?.();
+        haptic([90, 40, 90, 40, 140]);
+        return;
+      }
+
       // Vaporize the topmost planets to buy the player room back
       const sorted = [...bodiesRef.current].sort((a, b) => a.position.y - b.position.y);
       const kill   = sorted.slice(0, Math.min(COLLAPSE_VAPORIZE, sorted.length));
@@ -874,12 +892,13 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
       bodiesRef.current = bodiesRef.current.filter(b => !kill.includes(b));
 
       collapseCountRef.current += 1;
+      setCollapsesUsed(collapseCountRef.current);
       collapseImmuneUntil.current = Date.now() + COLLAPSE_IMMUNITY;
 
       // The run continues — the cost is on the clock, not the board. The
       // handler halves the remaining time and reports how much it took so the
       // FX and the HUD can name the exact number.
-      const lost = onCollapseRef.current?.() ?? 0;
+      const lost = onCollapseRef.current?.(COLLAPSE_LIMIT - collapseCountRef.current) ?? 0;
       if (lost > 0) setTimeDelta({ amount: -lost, key: Date.now() });
 
       collapseFXRef.current = { startedAt: Date.now(), lost };
@@ -1094,6 +1113,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
     mergeCountRef.current     = 0;
     maxChainRef.current       = 0;
     collapseCountRef.current  = 0;
+    setCollapsesUsed(0);
     mergesByStageRef.current  = {};
     lastDropTimeRef.current   = 0;
     containerWRef.current     = initialW;
@@ -1322,6 +1342,8 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
     timeDelta,
     gameOver,
     containerWidth,
+    collapsesUsed,
+    collapseLimit: COLLAPSE_LIMIT,
     startEngine,
     dropFruit,
     swapHold,

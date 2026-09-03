@@ -195,7 +195,7 @@ const SLIDES = [
     id: 'danger',
     Visual: VisualDanger,
     title: 'Mind the Danger Zone',
-    body: 'Any planet resting above the red line triggers game over. Keep the stack low — set up chain reactions to clear space fast.',
+    body: 'A planet resting above the red line collapses the stack and halves your clock. You get three of those — the fourth breach ends the run. Keep the stack low and chain merges to clear space fast.',
   },
   {
     id: 'powerups',
