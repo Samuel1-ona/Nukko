@@ -48,8 +48,8 @@ test('every level carries a shop objective — the ladder has no free tier', () 
   for (const l of LEVELS) {
     assert.ok(l.shopItems >= 1, `level ${l.level} has no shop objective`);
   }
-  assert.equal(LEVELS[0].shopItems, 1);
-  assert.equal(LEVELS[11].shopItems, 20);
+  assert.equal(LEVELS[0].shopItems, 2);
+  assert.equal(LEVELS[11].shopItems, 24);
 });
 
 test('spending is confined to a single objective', () => {
@@ -62,7 +62,7 @@ test('spending is confined to a single objective', () => {
 test('weekly shop cost matches the intended schedule at the cheapest tier', () => {
   // Counters count PURCHASES, not items, so the cheapest route is N single
   // $0.10 buys. This asserts the owner's cost-per-week column.
-  const expected = { 1: '0.10', 4: '0.40', 8: '1.00', 12: '2.00' };
+  const expected = { 1: '0.20', 4: '0.80', 8: '1.60', 12: '2.40' };
   for (const [level, cost] of Object.entries(expected)) {
     const actual = (LEVELS[level - 1].shopItems * 0.10).toFixed(2);
     assert.equal(actual, cost, `level ${level} weekly shop cost`);
@@ -83,14 +83,34 @@ test('badges are unique', () => {
 
 test('level 12 weekly load stays under a reachable ceiling', () => {
   const load = weeklyLoad(12);
-  // Observed best week ever: 34 runs. L12 is ~2x that by design, but it
-  // must still fit in a day a dedicated player actually has.
-  assert.ok(load.runsPerDay <= 12,    `level 12 asks ${load.runsPerDay.toFixed(1)} runs/day`);
-  assert.ok(load.minutesPerDay <= 30, `level 12 asks ${load.minutesPerDay.toFixed(1)} min/day`);
+  // The volume curve puts level 12 at 120 games INSIDE ONE WEEK — roughly
+  // 3.5x the best week ever observed (34 runs). That is the owner's intent,
+  // so the ceiling is a tripwire against a further edit rather than a claim
+  // that the rung is comfortable: ~17 runs and ~31 minutes a day.
+  assert.ok(load.runsPerDay <= 18,    `level 12 asks ${load.runsPerDay.toFixed(1)} runs/day`);
+  assert.ok(load.minutesPerDay <= 35, `level 12 asks ${load.minutesPerDay.toFixed(1)} min/day`);
   // And the points target must not silently demand far more runs than the
   // runs objective does: cap the implied per-run score at ~1.6x the
   // engaged-player median of 1,082.
   assert.ok(load.pointsPerRun <= 1750, `level 12 implies ${load.pointsPerRun} pts/run`);
+});
+
+test('the curve is the volume schedule the owner specified', () => {
+  // Games rise by ten a rung, purchases by two. These totals ARE the
+  // requirement — change them only on purpose.
+  LEVELS.forEach((l, i) => {
+    assert.equal(l.runs,      (i + 1) * 10, `level ${l.level} games`);
+    assert.equal(l.shopItems, (i + 1) * 2,  `level ${l.level} purchases`);
+    // Points track the observed median run (402) so they land for anyone
+    // who actually plays the games, instead of forming a second grind.
+    assert.equal(l.points, l.runs * 400, `level ${l.level} points`);
+  });
+
+  const total = k => LEVELS.reduce((a, l) => a + l[k], 0);
+  assert.equal(total('runs'), 780, 'games to clear all twelve rungs');
+  assert.equal(total('runs') - LEVELS[11].runs, 660, 'games to reach level 12');
+  assert.equal(total('shopItems'), 156, 'purchases to clear all twelve rungs');
+  assert.equal((total('shopItems') * 0.10).toFixed(2), '15.60', 'minimum spend');
 });
 
 // ─── Objectives ──────────────────────────────────────────────
@@ -124,7 +144,7 @@ test('a zero target counts as already met and never divides by zero', () => {
 test('an unmet objective at zero progress reports 0, not NaN', () => {
   const progress = objectiveProgress(counters(), 1);
   const shop = progress.find(p => p.key === 'shopItems');
-  assert.equal(shop.target, 1);
+  assert.equal(shop.target, 2);
   assert.equal(shop.met, false);
   assert.equal(shop.fraction, 0);
 });
@@ -330,17 +350,16 @@ test('a level never inherits what was banked on the level below it', () => {
   // The exact bug being fixed: one purchase and one run cleared level 1, and
   // under the old week-anchored window they counted toward level 2 as well.
   const events = [
+    { kind: 'buy', at: at(0, 8) },
     { kind: 'buy', at: at(0, 9) },
-    { kind: 'run', at: at(0, 10), score: 4000 },
-    { kind: 'run', at: at(0, 11), score: 4000 },
-    { kind: 'run', at: at(0, 12), score: 4000 },
+    ...Array.from({ length: 10 }, (_, i) => ({ kind: 'run', at: at(0, 10), score: 500 })),
   ];
   const until = progressWindowEnd(MONDAY);
 
   const card1 = countersOver(events, progressWindowStart(MONDAY, null), until);
   assert.ok(clearsLevel(card1, 1));
 
-  // Cleared at noon on Monday → the level-2 window opens there.
+  // Cleared on Monday morning → the level-2 window opens after it.
   const card2 = countersOver(events, progressWindowStart(MONDAY, at(0, 13)), until);
   assert.deepEqual(card2, { runs: 0, points: 0, activeDays: 0, shopItems: 0 });
 });

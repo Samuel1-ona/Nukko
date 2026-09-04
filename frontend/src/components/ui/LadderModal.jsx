@@ -332,8 +332,10 @@ function LadderMapView({ levels, claims, onClaim, claimBusy }) {
       }}>
         Every rung is its own piece of work: the targets below count only what you do
         <em style={{ fontStyle: 'normal', color: 'rgba(255,255,255,0.7)' }}> after </em>
-        you reach that level, and one clear moves you up one rung. Progress also resets
-        every Monday 00:00 UTC.
+        you reach that level, and one clear moves you up one rung — never more.
+        <br /><br />
+        You get one week per rung. Progress resets Monday 00:00 UTC, and a week that
+        clears nothing costs you a level.
       </div>
       {levels.map(l => (
         <LevelRow

@@ -1,19 +1,32 @@
 // The Nukko ladder: 12 levels, four weekly objectives each.
 //
-// Thresholds are CUMULATIVE, not per-level: level N+1 asks for higher
-// absolute numbers than level N, so progress banked this week carries
-// straight into the next card and a strong week can chain several levels
-// in one pass. Counters are never reset on level-up.
+// Thresholds are ABSOLUTE PER LEVEL, not cumulative: each rung's targets
+// count only what the player does AFTER arriving on it (see the progress
+// window in rules.js). Nothing carries over from the rung below, and one
+// clear moves the player exactly one rung.
+//
+// The window also closes at the end of the ladder week, so every rung is a
+// one-week sprint: clear it or Monday costs a level and the rung restarts.
+//
+// The curve (owner's call, Sep 2026) is built on volume:
+//   runs      N x 10  →  10, 20, 30 … 120   (780 games to clear all twelve)
+//   shopItems N x 2   →   2,  4,  6 …  24   (156 purchases, $15.60 at $0.10)
+//   points    runs x 400 — the observed median run is 402, so points land
+//             naturally for anyone who plays the games rather than forming
+//             a second grind on top of them.
+//   activeDays unchanged: the returning-player check, not a volume lever.
 //
 // Calibrated against 3,000 real sessions (29 Jul – 1 Sep 2026):
 //   median run 402 pts · p90 6,903 · median duration 109 s
 //   engaged player week: 7 runs, 9,735 pts, 2 active days
 //   best week ever observed: 34 runs, 6 active days
-// Level 12 is deliberately ~2x the best week ever recorded.
 //
-// Every level carries a shop objective (owner's call, Sep 2026): the ladder
-// has no free tier. Counters count PURCHASES, not items — a $0.90 ten-pack is
-// one buy, so the cheapest route to level 12 is 20 single $0.10 buys, $2/week.
+// Level 12 therefore asks 120 games and 24 purchases INSIDE ONE WEEK to
+// hold rank — far beyond any week yet observed, which is deliberate.
+//
+// Every level carries a shop objective: the ladder has no free tier.
+// Counters count PURCHASES, not items — a $0.90 ten-pack is one buy, so the
+// cheapest route through the ladder is 156 single $0.10 buys.
 
 export const MAX_LEVEL = 12;
 
@@ -33,18 +46,18 @@ export const OBJECTIVE_KEYS = OBJECTIVES.map(o => o.key);
 export const CASH_LEVELS = [4, 8, 12];
 
 export const LEVELS = [
-  { level: 1,  badge: 'DUST DRIFTER',       runs: 3,  points: 1000,   activeDays: 1, shopItems: 1,  reward: { bombs: 1,  expands: 0,  cash: null } },
-  { level: 2,  badge: 'PEBBLE PILOT',       runs: 5,  points: 2500,   activeDays: 1, shopItems: 2,  reward: { bombs: 0,  expands: 1,  cash: null } },
-  { level: 3,  badge: 'METEOR SCOUT',       runs: 8,  points: 5000,   activeDays: 2, shopItems: 3,  reward: { bombs: 2,  expands: 0,  cash: null } },
-  { level: 4,  badge: 'ASTEROID RIDER',     runs: 12, points: 9000,   activeDays: 2, shopItems: 4,  reward: { bombs: 0,  expands: 2,  cash: { amount: '0.50', token: 'USDT' } } },
-  { level: 5,  badge: 'COMET CHASER',       runs: 16, points: 14000,  activeDays: 3, shopItems: 5,  reward: { bombs: 3,  expands: 0,  cash: null } },
-  { level: 6,  badge: 'LUNAR WARDEN',       runs: 21, points: 20000,  activeDays: 3, shopItems: 6,  reward: { bombs: 0,  expands: 3,  cash: null } },
-  { level: 7,  badge: 'ORBIT BREAKER',      runs: 27, points: 28000,  activeDays: 4, shopItems: 8,  reward: { bombs: 4,  expands: 2,  cash: null } },
-  { level: 8,  badge: 'RING KEEPER',        runs: 34, points: 38000,  activeDays: 4, shopItems: 10,  reward: { bombs: 5,  expands: 5,  cash: { amount: '1.00', token: 'USDT' } } },
-  { level: 9,  badge: 'STORM GIANT',        runs: 42, points: 50000,  activeDays: 5, shopItems: 12,  reward: { bombs: 6,  expands: 6,  cash: null } },
-  { level: 10, badge: 'STARFORGE',          runs: 51, points: 64000,  activeDays: 5, shopItems: 14,  reward: { bombs: 8,  expands: 8,  cash: null } },
-  { level: 11, badge: 'NEUTRON ORACLE',     runs: 60, points: 80000,  activeDays: 6, shopItems: 17, reward: { bombs: 10, expands: 10, cash: null } },
-  { level: 12, badge: 'NUKKO SINGULARITY',  runs: 70, points: 100000, activeDays: 6, shopItems: 20, reward: { bombs: 15, expands: 15, cash: { amount: '2.00', token: 'USDT' } } },
+  { level: 1, badge: 'DUST DRIFTER',        runs: 10,  points: 4000,   activeDays: 1, shopItems: 2,  reward: { bombs: 1,  expands: 0,  cash: null } },
+  { level: 2, badge: 'PEBBLE PILOT',        runs: 20,  points: 8000,   activeDays: 1, shopItems: 4,  reward: { bombs: 0,  expands: 1,  cash: null } },
+  { level: 3, badge: 'METEOR SCOUT',        runs: 30,  points: 12000,  activeDays: 2, shopItems: 6,  reward: { bombs: 2,  expands: 0,  cash: null } },
+  { level: 4, badge: 'ASTEROID RIDER',      runs: 40,  points: 16000,  activeDays: 2, shopItems: 8,  reward: { bombs: 0,  expands: 2,  cash: { amount: '0.50', token: 'USDT' } } },
+  { level: 5, badge: 'COMET CHASER',        runs: 50,  points: 20000,  activeDays: 3, shopItems: 10, reward: { bombs: 3,  expands: 0,  cash: null } },
+  { level: 6, badge: 'LUNAR WARDEN',        runs: 60,  points: 24000,  activeDays: 3, shopItems: 12, reward: { bombs: 0,  expands: 3,  cash: null } },
+  { level: 7, badge: 'ORBIT BREAKER',       runs: 70,  points: 28000,  activeDays: 4, shopItems: 14, reward: { bombs: 4,  expands: 2,  cash: null } },
+  { level: 8, badge: 'RING KEEPER',         runs: 80,  points: 32000,  activeDays: 4, shopItems: 16, reward: { bombs: 5,  expands: 5,  cash: { amount: '1.00', token: 'USDT' } } },
+  { level: 9, badge: 'STORM GIANT',         runs: 90,  points: 36000,  activeDays: 5, shopItems: 18, reward: { bombs: 6,  expands: 6,  cash: null } },
+  { level: 10, badge: 'STARFORGE',           runs: 100, points: 40000,  activeDays: 5, shopItems: 20, reward: { bombs: 8,  expands: 8,  cash: null } },
+  { level: 11, badge: 'NEUTRON ORACLE',      runs: 110, points: 44000,  activeDays: 6, shopItems: 22, reward: { bombs: 10, expands: 10, cash: null } },
+  { level: 12, badge: 'NUKKO SINGULARITY',   runs: 120, points: 48000,  activeDays: 6, shopItems: 24, reward: { bombs: 15, expands: 15, cash: { amount: '2.00', token: 'USDT' } } },
 ];
 
 export function levelConfig(level) {
