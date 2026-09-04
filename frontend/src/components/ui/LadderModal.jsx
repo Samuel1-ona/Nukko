@@ -457,6 +457,10 @@ const TABS = [
 export default function LadderModal({ isOpen, onClose, ladder, levels, rewards, error, onRetry }) {
   const [tab, setTab] = useState('week');
   const [retrying, setRetrying] = useState(false);
+  // Declared here, above the `!isOpen` early return: a hook added below it
+  // changes the hook count on the render that opens the sheet.
+  const [claimBusy,  setClaimBusy]  = useState(null);
+  const [claimError, setClaimError] = useState(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -513,9 +517,7 @@ export default function LadderModal({ isOpen, onClose, ladder, levels, rewards, 
 
   // Unclaimed cash keyed by the level that paid it. Only rewards whose label
   // names a rung appear here — tournament and admin payouts stay in the inbox.
-  const claims     = unclaimedByLevel(rewards?.rewards);
-  const [claimBusy, setClaimBusy] = useState(null);
-  const [claimError, setClaimError] = useState(null);
+  const claims = unclaimedByLevel(rewards?.rewards);
 
   const onClaim = async (reward) => {
     setClaimBusy(reward.id);
