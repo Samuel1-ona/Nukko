@@ -32,6 +32,12 @@ export function adminRoutes(supabase, { settleCashGrant }) {
   r.post('/api/admin/cash-links', async (req, res) => {
     const { level, token = 'USDT', amount, links } = req.body ?? {};
 
+    // An unparsed body reads as every field missing, which surfaces as a
+    // confusing complaint about the first field checked. Name the real cause.
+    if (!req.body || !Object.keys(req.body).length) {
+      return res.status(400).json({ error: 'empty request body — is Content-Type: application/json set?' });
+    }
+
     // Validated against what the server will actually pay out, not a fixed
     // list — the two drift the moment the test whitelist is armed or disarmed.
     const fundable = poolLevels();

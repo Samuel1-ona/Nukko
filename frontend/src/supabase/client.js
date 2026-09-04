@@ -14,11 +14,15 @@ export async function api(path, options = {}) {
   for (let attempt = 0; attempt <= (isWrite ? RETRIES : 0); attempt++) {
     try {
       const res = await fetch(`${API_URL}${path}`, {
+        ...options,
+        // Merged AFTER the spread, or a caller passing its own headers (the
+        // admin routes send Authorization) replaces the whole object and drops
+        // Content-Type. express.json() then skips the body, every field reads
+        // as undefined, and the route rejects a request that was actually fine.
         headers: { 'Content-Type': 'application/json', ...options.headers },
         // keepalive lets small write requests finish even if the page
         // navigates away (e.g. game-over screen change mid-request)
         keepalive: isWrite,
-        ...options,
       });
       // A 404 from a stale deployment returns an HTML error page, and
       // res.json() then fails with "Unexpected token '<'", which hides the
