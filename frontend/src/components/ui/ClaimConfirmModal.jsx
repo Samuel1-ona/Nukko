@@ -3,11 +3,12 @@ import { Modal, ModalTitle, PrimaryButton, GhostButton } from './kit.jsx';
 import { DIM, GOLD, BODY, NUM } from '../../theme/tokens.js';
 
 /**
- * Step 2 of a claim. Shown when the app comes back to the foreground with
- * a claim still pending, because a reward marked claimed that never
- * arrived cannot be proven or undone.
+ * Shown when the app comes back to the foreground after a claim. The reward
+ * is already marked claimed — the link was handed over — so both answers
+ * lead somewhere useful: YES retries the write if it failed while offline,
+ * NO reopens the same link instead of sending the player hunting for it.
  */
-export default function ClaimConfirmModal({ pending, onConfirm, onDismiss }) {
+export default function ClaimConfirmModal({ pending, onConfirm, onReopen, onDismiss }) {
   const [busy, setBusy] = useState(false);
   if (!pending) return null;
 
@@ -36,16 +37,19 @@ export default function ClaimConfirmModal({ pending, onConfirm, onDismiss }) {
         }}>
           {pending.label}
           <br />
-          Only confirm once it is in your wallet. If it did not arrive, keep it
-          unclaimed and open the link again.
+          If it did not land, reopen the link — it is the same one, and it stays
+          open until the money is taken.
         </div>
 
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 9 }}>
           <PrimaryButton onClick={confirm} disabled={busy} height={48}>
             {busy ? 'Saving…' : 'Yes, I got it'}
           </PrimaryButton>
-          <GhostButton onClick={busy ? undefined : onDismiss} height={42}>
-            Not yet — keep it unclaimed
+          <GhostButton onClick={busy ? undefined : onReopen} height={42}>
+            Not yet — reopen the link
+          </GhostButton>
+          <GhostButton onClick={busy ? undefined : onDismiss} height={38}>
+            Close
           </GhostButton>
         </div>
       </div>

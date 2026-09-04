@@ -6,8 +6,10 @@
 
 import {
   weekKey, applyRollover, climb, objectiveProgress, atRiskOfDemotion,
+  progressWindowStart, progressWindowEnd,
   levelConfig, LEVELS, MAX_LEVEL,
 } from './rules.js';
+import { isCashMilestone } from './levels.js';
 import { syncChainEvents } from '../chain/indexer.js';
 import { verifyPendingPurchases } from '../chain/purchases.js';
 import { issueReward, rewardsConfigured } from '../rewards/client.js';
@@ -22,6 +24,7 @@ function toState(row) {
     levelsGainedThisWeek: row.levels_gained_this_week,
     heldRankThisWeek:     row.held_rank_this_week,
     lastDemotion:         row.last_demotion,
+    levelStartedAt:       row.level_started_at,
   };
 }
 
@@ -37,7 +40,7 @@ async function loadOrCreate(supabase, wallet, currentWeek) {
 
   const { data: created, error } = await supabase
     .from('player_ladder')
-    .insert({ wallet_address: wallet, week_start: currentWeek })
+    .insert({ wallet_address: wallet, week_start: currentWeek, level_started_at: new Date().toISOString() })
     .select().single();
 
   if (error) {
@@ -50,10 +53,14 @@ async function loadOrCreate(supabase, wallet, currentWeek) {
   return toState(created);
 }
 
-async function readCounters(supabase, wallet, weekStart) {
+// Counters over the CURRENT LEVEL's window: from the later of the week
+// start and the moment the player arrived on this level, to the week's end.
+// Nothing banked on the level below can fall inside it.
+async function readCounters(supabase, wallet, weekStart, levelStartedAt) {
   const { data, error } = await supabase.rpc('ladder_counters', {
     p_wallet: wallet,
-    p_week_start: `${weekStart}T00:00:00Z`,
+    p_since:  progressWindowStart(weekStart, levelStartedAt),
+    p_until:  progressWindowEnd(weekStart),
   });
   if (error) throw new Error(`ladder_counters failed: ${error.message}`);
   const row = Array.isArray(data) ? data[0] : data;
@@ -81,7 +88,7 @@ async function readGrants(supabase, wallet) {
  */
 async function grantLevel(supabase, wallet, level) {
   const cfg    = levelConfig(level);
-  const isCash = Boolean(cfg.reward.cash);
+  const isCash = isCashMilestone(level, wallet);
 
   const { data, error } = await supabase
     .from('ladder_grants')
@@ -181,6 +188,10 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
   // ── Rollover (lazy, never a cron job) ────────────────────────
   const rolled = applyRollover(state, currentWeek);
   if (rolled.rolled) {
+    // A demotion is an arrival at a level like any other, so it restamps the
+    // window. Without this, a player dropped to level 3 on Monday would be
+    // measured against a stamp from the level they left.
+    const arrivedAt = new Date().toISOString();
     state = {
       level: rolled.level,
       highestLevel: state.highestLevel,
@@ -188,6 +199,7 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
       levelsGainedThisWeek: 0,
       heldRankThisWeek: false,
       lastDemotion: rolled.demotion,
+      levelStartedAt: arrivedAt,
     };
     if (write) {
       await supabase.from('player_ladder').update({
@@ -196,13 +208,16 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
         levels_gained_this_week: 0,
         held_rank_this_week:     false,
         last_demotion:           rolled.demotion,
+        level_started_at:        arrivedAt,
         updated_at:              new Date().toISOString(),
       }).eq('wallet_address', wallet);
     }
   }
 
   // ── Counters + climb ─────────────────────────────────────────
-  const counters = await readCounters(supabase, wallet, state.weekStart);
+  // Measured over the current level's own window, so `climb` can only ever
+  // clear the level the player is standing on.
+  let counters   = await readCounters(supabase, wallet, state.weekStart, state.levelStartedAt);
   const result   = climb(state.level, counters);
 
   const granted = [];
@@ -220,10 +235,13 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
       }
 
       let cash = null;
-      if (cfg.reward.cash) cash = await settleCashGrant(supabase, wallet, level, grantId);
+      if (isCashMilestone(level, wallet)) cash = await settleCashGrant(supabase, wallet, level, grantId);
 
       granted.push({ level, badge: cfg.badge, bombs: cfg.reward.bombs, expands: cfg.reward.expands, cash });
     }
+
+    // Arriving on the new card reopens the window at this instant.
+    const arrivedAt = result.levelsGained > 0 ? new Date().toISOString() : state.levelStartedAt;
 
     state = {
       ...state,
@@ -231,6 +249,7 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
       highestLevel:         Math.max(state.highestLevel, result.level),
       levelsGainedThisWeek: state.levelsGainedThisWeek + result.levelsGained,
       heldRankThisWeek:     state.heldRankThisWeek || result.held,
+      levelStartedAt:       arrivedAt,
     };
 
     await supabase.from('player_ladder').update({
@@ -238,11 +257,20 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
       highest_level:           state.highestLevel,
       levels_gained_this_week: state.levelsGainedThisWeek,
       held_rank_this_week:     state.heldRankThisWeek,
+      level_started_at:        arrivedAt,
       updated_at:              new Date().toISOString(),
     }).eq('wallet_address', wallet);
+
+    // The new card is empty by construction: its window opened a moment ago,
+    // so nothing can yet fall inside it and a second round trip would only
+    // confirm that. The consequence is deliberate — the run that just cleared
+    // the old level started before the stamp and does not count here.
+    if (result.levelsGained > 0) counters = { runs: 0, points: 0, activeDays: 0, shopItems: 0 };
   } else if (!write) {
     // Display only: project where this week's progress would put them, so the
     // read view never warns about a demotion the next sync would prevent.
+    // The projected card is empty for the same reason the written one is.
+    if (result.levelsGained > 0) counters = { runs: 0, points: 0, activeDays: 0, shopItems: 0 };
     state = {
       ...state,
       level:                result.level,
@@ -276,6 +304,8 @@ function buildView(grants, state, counters, result) {
     maxLevel:     MAX_LEVEL,
     weekStart:    state.weekStart,
     weekEndsAt,
+    // When this card's window opened — the UI dates the card from it.
+    levelStartedAt: state.levelStartedAt ?? null,
     levelsGainedThisWeek: state.levelsGainedThisWeek,
     heldRank:     state.heldRankThisWeek,
     lastDemotion: state.lastDemotion,

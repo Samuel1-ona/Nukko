@@ -17,19 +17,30 @@ export function useLadder(address) {
   const knownGrants  = useRef(new Set());
   const initialised  = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    api('/api/ladder/levels')
-      .then(d => { if (!cancelled) setLevels(d); })
-      .catch(() => { /* the map view degrades to the state payload's own copy */ });
-    return () => { cancelled = true; };
+  // The static 12-rung curve. Kept separate from the wallet's own state so
+  // the map tab can render before (or without) a successful sync.
+  const loadLevels = useCallback(async () => {
+    try {
+      const d = await api('/api/ladder/levels');
+      setLevels(d);
+      return d;
+    } catch {
+      // the map view degrades to the state payload's own copy
+      return null;
+    }
   }, []);
+
+  const levelsRef = useRef(null);
+  levelsRef.current = levels;
+
+  useEffect(() => { loadLevels(); }, [loadLevels]);
 
   // Authoritative pass: rolls the week over, climbs, pays out. Idempotent,
   // so it is safe on every home-screen mount and after every run.
   const sync = useCallback(async ({ silent = false, fresh = false } = {}) => {
     if (!address) return null;
     if (!silent) setLoading(true);
+    if (!levelsRef.current) loadLevels();
     try {
       const view = await api(`/api/ladder/${address}/sync${fresh ? '?fresh=1' : ''}`, { method: 'POST' });
 
@@ -58,7 +69,7 @@ export function useLadder(address) {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, loadLevels]);
 
   // Read-only variant for display surfaces.
   const refresh = useCallback(async () => {
@@ -78,7 +89,16 @@ export function useLadder(address) {
   }, [address]);
 
   useEffect(() => {
-    if (!address) { setState(null); knownGrants.current = new Set(); initialised.current = false; return; }
+    if (!address) {
+      setState(null);
+      // Without a wallet there is nothing to sync — say so rather than
+      // leaving the UI on a placeholder that never resolves.
+      setError('Connect a wallet to see your ladder.');
+      knownGrants.current = new Set();
+      initialised.current = false;
+      return;
+    }
+    setError(null);
     sync({ silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address]);

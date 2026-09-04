@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LEVELS, MAX_LEVEL, OBJECTIVE_KEYS, CASH_LEVELS } from './levels.js';
+import { LEVELS, MAX_LEVEL, OBJECTIVE_KEYS, CASH_LEVELS,
+         CASH_MILESTONES, TEST_CASH_LEVELS, isCashMilestone, poolLevels } from './levels.js';
 import {
   weekKey, weeksBetween, meetsObjective, clearsLevel, objectiveProgress,
   climb, applyRollover, atRiskOfDemotion, weeklyLoad,
+  progressWindowStart, progressWindowEnd,
 } from './rules.js';
 
 // Counters that clear any level in the table.
@@ -235,22 +237,29 @@ test('climb: no progress means no movement', () => {
   assert.equal(r.held, false);
 });
 
-test('climb: chains multiple levels in a single pass', () => {
+test('climb: a level-5-sized week still only moves one rung', () => {
+  // This used to chain 1→6 in a single pass. It cannot any more: the level-2
+  // window opens the instant level 1 is cleared, so the counters that cleared
+  // level 1 are not evidence about level 2 and must not be spent as if they were.
   const cfg = LEVELS[4]; // level 5 targets
   const r = climb(1, counters({
     runs: cfg.runs, points: cfg.points, activeDays: cfg.activeDays, shopItems: cfg.shopItems,
   }));
-  assert.equal(r.level, 6);
-  assert.equal(r.levelsGained, 5);
-  assert.deepEqual(r.clearedLevels, [1, 2, 3, 4, 5]);
+  assert.equal(r.level, 2);
+  assert.equal(r.levelsGained, 1);
+  assert.deepEqual(r.clearedLevels, [1]);
   assert.equal(r.held, false);
 });
 
 test('climb: never exceeds level 12', () => {
   const r = climb(1, ALL);
-  assert.equal(r.level, MAX_LEVEL);
-  assert.equal(r.levelsGained, 11);
-  assert.deepEqual(r.clearedLevels, [1,2,3,4,5,6,7,8,9,10,11,12]);
+  assert.equal(r.level, 2);
+  assert.equal(r.levelsGained, 1);
+  assert.deepEqual(r.clearedLevels, [1]);
+  // Reaching 12 now takes eleven separate passes, each with its own window.
+  let level = 1;
+  for (let i = 0; i < 20 && level < MAX_LEVEL; i++) level = climb(level, ALL).level;
+  assert.equal(level, MAX_LEVEL);
 });
 
 test('climb: level 12 reports held rather than advancing', () => {
@@ -267,15 +276,217 @@ test('climb: at 12 without clearing the card, nothing is held', () => {
   assert.deepEqual(r.clearedLevels, []);
 });
 
-test('climb: cumulative thresholds mean counters are never consumed', () => {
-  // Clearing level 1 must not deduct from the counters used for level 2.
+test('climb never mutates the counters it was given', () => {
   const cfg = LEVELS[1]; // level 2
   const c = counters({
     runs: cfg.runs, points: cfg.points, activeDays: cfg.activeDays, shopItems: cfg.shopItems,
   });
   const r = climb(1, c);
-  assert.equal(r.level, 3);
+  assert.equal(r.level, 2);
   assert.deepEqual(c, counters({
     runs: cfg.runs, points: cfg.points, activeDays: cfg.activeDays, shopItems: cfg.shopItems,
   }), 'climb mutated the counters it was given');
+});
+
+
+// ─── Per-level progress windows ──────────────────────────────
+// The window is what makes a level start from zero. These tests model the
+// counter the way ladder_counters() does — an event counts when it was
+// recorded at or after the window opens and before the week ends — so the
+// arithmetic is exercised without a database.
+
+const MONDAY = '2026-08-31';                       // a real Monday, 00:00 UTC
+const at = (dayOffset, hour = 12) =>
+  new Date(Date.UTC(2026, 7, 31 + dayOffset, hour)).toISOString();
+
+// Events the player has produced this week: one entry per scored run, plus
+// the verified purchases. Counted exactly like the SQL does.
+function countersOver(events, since, until) {
+  const inWindow = events.filter(e => e.at >= since && e.at < until);
+  const runs     = inWindow.filter(e => e.kind === 'run');
+  return {
+    runs:       runs.length,
+    points:     runs.reduce((a, e) => a + e.score, 0),
+    activeDays: new Set(runs.map(e => e.at.slice(0, 10))).size,
+    shopItems:  inWindow.filter(e => e.kind === 'buy').length,
+  };
+}
+
+test('the window opens at the week start until a level is entered later', () => {
+  assert.equal(progressWindowStart(MONDAY, null), `${MONDAY}T00:00:00.000Z`);
+  // A stamp from a previous week must never widen the window backwards.
+  assert.equal(progressWindowStart(MONDAY, at(-3)), `${MONDAY}T00:00:00.000Z`);
+  // A stamp inside the week wins: that is the fresh start.
+  assert.equal(progressWindowStart(MONDAY, at(2)), at(2));
+});
+
+test('the window always closes at the end of the ladder week', () => {
+  assert.equal(progressWindowEnd(MONDAY), '2026-09-07T00:00:00.000Z');
+  // Entering a level on Friday must not buy two extra days.
+  assert.equal(progressWindowEnd(MONDAY), progressWindowEnd(MONDAY, at(4)));
+});
+
+test('a level never inherits what was banked on the level below it', () => {
+  // The exact bug being fixed: one purchase and one run cleared level 1, and
+  // under the old week-anchored window they counted toward level 2 as well.
+  const events = [
+    { kind: 'buy', at: at(0, 9) },
+    { kind: 'run', at: at(0, 10), score: 4000 },
+    { kind: 'run', at: at(0, 11), score: 4000 },
+    { kind: 'run', at: at(0, 12), score: 4000 },
+  ];
+  const until = progressWindowEnd(MONDAY);
+
+  const card1 = countersOver(events, progressWindowStart(MONDAY, null), until);
+  assert.ok(clearsLevel(card1, 1));
+
+  // Cleared at noon on Monday → the level-2 window opens there.
+  const card2 = countersOver(events, progressWindowStart(MONDAY, at(0, 13)), until);
+  assert.deepEqual(card2, { runs: 0, points: 0, activeDays: 0, shopItems: 0 });
+});
+
+test('climb clears at most one level per pass, however big the week', () => {
+  // Counters that clear every card in the table still only move one rung:
+  // arriving on the next level reopens the window, so the snapshot that
+  // cleared this level says nothing about the next one.
+  const step = climb(1, ALL);
+  assert.equal(step.level, 2);
+  assert.equal(step.levelsGained, 1);
+  assert.deepEqual(step.clearedLevels, [1]);
+});
+
+test('a full climb reads each card against its own targets, starting empty', () => {
+  // Walks 1→12 the way a real player does: each card starts empty, is cleared
+  // by its own targets alone, and the week rolls over when the card needs more
+  // days than the week has left. Gaining a level protects against demotion, so
+  // the climb continues across the boundary.
+  let level      = 1;
+  let weekStart  = MONDAY;
+  let dayInWeek  = 0;
+  let openedAt   = progressWindowStart(weekStart, null);
+  let events     = [];
+  let weeks      = 1;
+
+  const rollWeek = () => {
+    weeks     += 1;
+    weekStart  = new Date(new Date(`${weekStart}T00:00:00Z`).getTime() + 7 * 86_400_000)
+                   .toISOString().slice(0, 10);
+    dayInWeek  = 0;
+    events     = [];                       // counters are week-anchored too
+    openedAt   = progressWindowStart(weekStart, null);
+  };
+
+  const dayAt = (offset) =>
+    new Date(new Date(`${weekStart}T00:00:00Z`).getTime() + offset * 86_400_000);
+  const stamp = (offset, hour) =>
+    new Date(dayAt(offset).getTime() + hour * 3_600_000).toISOString();
+
+  while (level <= MAX_LEVEL) {
+    const cfg  = LEVELS[level - 1];
+    const days = Math.max(1, cfg.activeDays);
+
+    // Not enough week left for this card's active days — wait for Monday.
+    if (dayInWeek + days > 7) rollWeek();
+
+    const until   = progressWindowEnd(weekStart);
+    const opening = countersOver(events, openedAt, until);
+    assert.deepEqual(
+      opening, { runs: 0, points: 0, activeDays: 0, shopItems: 0 },
+      `level ${level} did not start from zero`,
+    );
+    assert.ok(!clearsLevel(opening, level), `level ${level} cleared itself on arrival`);
+
+    // Play exactly this card's own requirement — no more.
+    for (let i = 0; i < cfg.shopItems; i++) events.push({ kind: 'buy', at: stamp(dayInWeek, 1) });
+    for (let i = 0; i < cfg.runs; i++) {
+      events.push({
+        kind: 'run',
+        at: stamp(dayInWeek + (i % days), 2),
+        score: Math.ceil(cfg.points / cfg.runs),
+      });
+    }
+
+    const filled = countersOver(events, openedAt, until);
+    assert.ok(clearsLevel(filled, level), `level ${level} was not cleared by its own targets`);
+
+    const step = climb(level, filled);
+    assert.deepEqual(step.clearedLevels, [level]);
+    if (level === MAX_LEVEL) { assert.ok(step.held); break; }
+    assert.equal(step.levelsGained, 1);
+
+    // Arrival on the next card reopens the window at that instant.
+    dayInWeek += days;
+    openedAt   = stamp(dayInWeek, 0);
+    level      = step.level;
+  }
+
+  assert.equal(level, MAX_LEVEL);
+  // Pins the consequence of absolute per-level targets: the ladder is no
+  // longer a one-week sprint. Change this number only on purpose.
+  assert.equal(weeks, 8, `a clean 1→12 climb now spans ${weeks} weeks`);
+});
+
+test('the active-days curve is what bounds a single week', () => {
+  // With per-level windows the active-day targets no longer overlap: they add
+  // up. Twelve rungs ask for more distinct days than a week contains, so the
+  // ladder cannot be cleared end to end between two Mondays — by design, but
+  // worth failing loudly if someone rescales the curve without meaning to.
+  const totalDays = LEVELS.reduce((a, l) => a + Math.max(1, l.activeDays), 0);
+  assert.ok(totalDays > 7, 'the whole ladder now fits in one week');
+  assert.equal(totalDays, 42);
+});
+
+test('a demotion reopens the window, so the lost level is re-earned in full', () => {
+  const rolled = applyRollover(
+    ladder({ level: 5, weekStart: '2026-08-24', levelsGainedThisWeek: 0 }),
+    MONDAY,
+  );
+  assert.equal(rolled.level, 4);
+
+  // The service stamps level_started_at on that arrival; progress from the
+  // week they were demoted out of cannot reach across into the new card.
+  const events = [{ kind: 'run', at: at(-2), score: 50_000 }, { kind: 'buy', at: at(-2) }];
+  const counters = countersOver(
+    events,
+    progressWindowStart(MONDAY, at(0, 0)),
+    progressWindowEnd(MONDAY),
+  );
+  assert.deepEqual(counters, { runs: 0, points: 0, activeDays: 0, shopItems: 0 });
+});
+
+test('the week boundary resets a card even when the level never changed', () => {
+  // Keeping the week start in the maximum is what makes this true, and it is
+  // what keeps the Monday demotion rule meaningful.
+  const enteredLastWeek = at(-4);
+  const events = [{ kind: 'run', at: at(-2), score: 9000 }];
+
+  const lastWeek = countersOver(events, progressWindowStart('2026-08-24', enteredLastWeek), progressWindowEnd('2026-08-24'));
+  assert.equal(lastWeek.runs, 1);
+
+  const thisWeek = countersOver(events, progressWindowStart(MONDAY, enteredLastWeek), progressWindowEnd(MONDAY));
+  assert.equal(thisWeek.runs, 0);
+});
+
+
+// ─── The cash payout test whitelist ──────────────────────────
+
+test('with the whitelist unset, only the public milestones pay', () => {
+  // The default shipped state. TEST_CASH_ADDRESSES is read at import time and
+  // is empty in the test environment.
+  for (const level of [4, 8, 12]) {
+    assert.ok(isCashMilestone(level, '0xanyone'), `level ${level} should pay everybody`);
+  }
+  for (const level of TEST_CASH_LEVELS) {
+    assert.ok(!isCashMilestone(level, '0xanyone'), `test level ${level} paid an unlisted address`);
+  }
+  assert.deepEqual(poolLevels(), [...CASH_MILESTONES].sort((a, b) => a - b));
+});
+
+test('a test level is never advertised as a public milestone', () => {
+  // CASH_MILESTONES drives what the ladder promises. A test level leaking into
+  // it would promise every player money that will not be paid.
+  for (const level of TEST_CASH_LEVELS) {
+    assert.ok(!CASH_MILESTONES.has(level), `test level ${level} leaked into the public curve`);
+    assert.ok(!CASH_LEVELS.includes(level), `test level ${level} leaked into CASH_LEVELS`);
+  }
 });

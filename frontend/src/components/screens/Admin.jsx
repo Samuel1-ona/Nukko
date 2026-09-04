@@ -61,6 +61,9 @@ export default function Admin({ onExit, address, walletClient, onConnect }) {
   const [authed,  setAuthed]  = useState(false);
   const [signing, setSigning] = useState(false);
   const [pool,    setPool]    = useState(null);
+  // What the SERVER says it will accept. A hardcoded list here funds a level
+  // the server rejects the moment the cash whitelist changes underneath it.
+  const [fundable, setFundable] = useState([]);
   const [grants,  setGrants]  = useState(null);
   const [summary, setSummary] = useState(null);
   const [msg,     setMsg]     = useState(null);
@@ -86,7 +89,7 @@ export default function Admin({ onExit, address, walletClient, onConnect }) {
         auth('/api/admin/grants'),
         auth('/api/admin/summary'),
       ]);
-      setPool(p.pool); setGrants(g); setSummary(s);
+      setPool(p.pool); setFundable(p.fundable ?? []); setGrants(g); setSummary(s);
       setAuthed(true);
     } catch (e) {
       setAuthed(false);
@@ -267,9 +270,10 @@ export default function Admin({ onExit, address, walletClient, onConnect }) {
             <div style={{ flex: 1 }}>
               <div style={{ ...label, marginBottom: 5 }}>Level</div>
               <select value={level} onChange={e => setLevel(e.target.value)} style={input}>
-                <option value={4}>4 — ASTEROID RIDER</option>
-                <option value={8}>8 — RING KEEPER</option>
-                <option value={12}>12 — NUKKO SINGULARITY</option>
+                {fundable.map((lv) => {
+                  const badge = (pool ?? []).find(p => p.level === lv)?.badge;
+                  return <option key={lv} value={lv}>{badge ? `${lv} — ${badge}` : lv}</option>;
+                })}
               </select>
             </div>
             <div style={{ width: 90 }}>

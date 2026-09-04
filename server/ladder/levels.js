@@ -58,3 +58,40 @@ export function targetsFor(level) {
   const cfg = levelConfig(level);
   return Object.fromEntries(OBJECTIVE_KEYS.map(k => [k, cfg[k]]));
 }
+
+// ─── Cash milestones ─────────────────────────────────────────
+// The public curve: these are the rungs the ladder promises money at, and
+// the only ones every player sees advertised.
+export const CASH_MILESTONES = new Set(CASH_LEVELS);
+
+// Levels that pay ONLY the test whitelist. Reaching level 4 legitimately
+// costs a week of play, which is too slow to exercise a payout end to end.
+//
+// Kept deliberately separate from CASH_MILESTONES: that set drives what the
+// ladder advertises, and a test level must never promise every player money
+// it will not pay them.
+export const TEST_CASH_LEVELS = new Set([1]);
+
+// Env-driven with no seeded address, so unsetting the variable reverts the
+// behaviour, the fundable pool levels and the admin portal in one move — no
+// code change, no redeploy of anything but the env.
+export const TEST_CASH_ADDRESSES = new Set(
+  (process.env.TEST_CASH_ADDRESSES ?? '')
+    .split(',').map(a => a.trim().toLowerCase()).filter(Boolean),
+);
+
+// Every grant decision goes through here — never a bare set lookup — so the
+// whitelist cannot be bypassed by a call site that forgot about it.
+export function isCashMilestone(level, address) {
+  if (CASH_MILESTONES.has(level)) return true;
+  if (!TEST_CASH_LEVELS.has(level)) return false;
+  return TEST_CASH_ADDRESSES.has(String(address ?? '').toLowerCase());
+}
+
+// Levels the pool and the admin portal accept. Widens to the test levels
+// only while the whitelist is armed.
+export function poolLevels() {
+  const levels = [...CASH_MILESTONES];
+  if (TEST_CASH_ADDRESSES.size) levels.push(...TEST_CASH_LEVELS);
+  return [...new Set(levels)].sort((a, b) => a - b);
+}

@@ -773,6 +773,8 @@ export default function App() {
         ladder={ladderApi.ladder}
         levels={ladderApi.levels}
         rewards={rewardsApi}
+        error={ladderApi.error}
+        onRetry={() => ladderApi.sync({ fresh: true })}
       />
 
       {/* Celebration — only fires for levels that actually paid out */}
@@ -785,6 +787,7 @@ export default function App() {
       <ClaimConfirmModal
         pending={rewardsApi.pending}
         onConfirm={rewardsApi.confirm}
+        onReopen={rewardsApi.reopenPending}
         onDismiss={rewardsApi.dismissPending}
       />
 

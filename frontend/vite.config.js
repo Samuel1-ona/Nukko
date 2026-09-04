@@ -37,5 +37,16 @@ export default defineConfig({
   },
   server: {
     allowedHosts: true,
+    // The dev server is usually reached through an ngrok tunnel (MiniPay only
+    // runs on a phone), and on that phone "localhost" is the phone itself. So
+    // dev builds call /api on their own origin and Vite forwards it to the API
+    // server here. Override the target to test against the deployed backend:
+    //   API_PROXY_TARGET=https://nukko.onrender.com npm run dev
+    proxy: {
+      '/api': {
+        target: process.env.API_PROXY_TARGET || 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
   },
 });

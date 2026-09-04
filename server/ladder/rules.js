@@ -24,6 +24,26 @@ export function weekKey(date = new Date()) {
   return weekStartOf(date).toISOString().slice(0, 10);
 }
 
+// ─── Progress window ─────────────────────────────────────────
+// Counters are measured from the LATEST of the week start and the moment
+// the player arrived on their current level, so a level never inherits
+// what was banked on the level below it.
+//
+// Keeping the week start in the maximum is deliberate: it means counters
+// still reset every Monday for a player who never changes level, which is
+// what keeps the weekly demotion rule meaningful.
+export function progressWindowStart(weekStart, levelStartedAt) {
+  const week  = new Date(`${weekStart}T00:00:00Z`);
+  const level = levelStartedAt ? new Date(levelStartedAt) : null;
+  const start = level && level > week ? level : week;
+  return start.toISOString();
+}
+
+// The window always closes at the end of the ladder week.
+export function progressWindowEnd(weekStart) {
+  return new Date(new Date(`${weekStart}T00:00:00Z`).getTime() + WEEK_MS).toISOString();
+}
+
 // Whole weeks between two Monday-anchored week keys. Negative if b < a.
 export function weeksBetween(aKey, bKey) {
   const a = new Date(`${aKey}T00:00:00Z`).getTime();
@@ -66,23 +86,25 @@ export function objectiveProgress(counters, level) {
 // Clearing card N grants level N's reward and moves the player to N+1.
 // Card 12 cleared is a HOLD: there is no level 13, so the player stays
 // at 12 and is protected from Monday's drop.
+//
+// AT MOST ONE LEVEL PER PASS. This is forced by the per-level window, not
+// a policy choice: arriving on N+1 reopens the window at that instant, so
+// the counters that just cleared N say nothing whatsoever about N+1. A
+// huge week can no longer skip a player past rungs they never played.
 
 export function climb(startLevel, counters) {
-  let level = startLevel;
-  const clearedLevels = [];
-  let held = false;
-
-  while (clearsLevel(counters, level)) {
-    clearedLevels.push(level);
-    if (level === MAX_LEVEL) { held = true; break; }
-    level += 1;
+  if (!clearsLevel(counters, startLevel)) {
+    return { level: startLevel, levelsGained: 0, held: false, clearedLevels: [] };
   }
+
+  const held  = startLevel === MAX_LEVEL;
+  const level = held ? startLevel : startLevel + 1;
 
   return {
     level,
     levelsGained: level - startLevel,
     held,
-    clearedLevels,
+    clearedLevels: [startLevel],
   };
 }
 

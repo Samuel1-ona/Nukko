@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// An empty VITE_API_URL is meaningful: it means "same origin", which is how
+// dev runs (vite proxies /api). Only a genuinely unset value falls back.
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
 const RETRIES     = 3;
 const RETRY_DELAY = 3000; // ms — long enough to ride out a Render cold start

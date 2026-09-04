@@ -5,7 +5,7 @@
 // never returned by it. Nothing here ever selects cash_link_url.
 
 import { Router } from 'express';
-import { CASH_LEVELS, LEVELS } from '../ladder/levels.js';
+import { LEVELS, poolLevels } from '../ladder/levels.js';
 import { levelConfig } from '../ladder/rules.js';
 import { requireAdmin, issueNonce, verifySignature } from './adminAuth.js';
 
@@ -32,8 +32,11 @@ export function adminRoutes(supabase, { settleCashGrant }) {
   r.post('/api/admin/cash-links', async (req, res) => {
     const { level, token = 'USDT', amount, links } = req.body ?? {};
 
-    if (!CASH_LEVELS.includes(Number(level))) {
-      return res.status(400).json({ error: `level must be one of ${CASH_LEVELS.join(', ')}` });
+    // Validated against what the server will actually pay out, not a fixed
+    // list — the two drift the moment the test whitelist is armed or disarmed.
+    const fundable = poolLevels();
+    if (!fundable.includes(Number(level))) {
+      return res.status(400).json({ error: `level must be one of ${fundable.join(', ')}` });
     }
     if (!Array.isArray(links) || links.length === 0) {
       return res.status(400).json({ error: 'links must be a non-empty array of URLs' });
@@ -71,7 +74,7 @@ export function adminRoutes(supabase, { settleCashGrant }) {
       .select('level, amount, token, assigned_to');
     if (error) return res.status(500).json({ error: error.message });
 
-    const byLevel = CASH_LEVELS.map((level) => {
+    const byLevel = poolLevels().map((level) => {
       const rows = (data ?? []).filter(r => r.level === level);
       return {
         level,
@@ -82,7 +85,10 @@ export function adminRoutes(supabase, { settleCashGrant }) {
         total:     rows.length,
       };
     });
-    res.json({ pool: byLevel });
+    // `fundable` is what the client renders its level picker from. A hardcoded
+    // list on the client funds a level the server rejects the moment the
+    // whitelist changes underneath it.
+    res.json({ pool: byLevel, fundable: poolLevels() });
   });
 
   // ─── Who reached a cash milestone: owed vs paid ─────────────
