@@ -1,6 +1,26 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { listRewards, revealReward, confirmClaim } from '../rewards/api.js';
 import { rewardsConfigured } from '../rewards/client.js';
+import { isMiniPay } from '../utils/miniPay.js';
+
+// Opening the link is the one step that actually hands over the money, so it
+// must not depend on window.open. MiniPay's webview returns a live-looking
+// window object that never renders, so assigning to tab.location silently
+// does nothing and the player sees no link at all. Inside MiniPay we always
+// navigate the current page; elsewhere a blocked or missing popup falls back
+// to the same thing rather than failing quietly.
+function openCashLink(url, tab) {
+  if (isMiniPay() || !tab || tab.closed) {
+    tab?.close?.();
+    window.location.href = url;
+    return;
+  }
+  try {
+    tab.location.href = url;
+  } catch {
+    window.location.href = url;
+  }
+}
 
 // A claim is marked the moment the link is handed over, not when the player
 // comes back and says so. The claimed flag was never what gated access to the
@@ -89,9 +109,10 @@ export function useRewards(address) {
   const claim = useCallback(async (reward) => {
     if (!addressRef.current) throw new Error('Wallet not connected');
 
-    // Opened synchronously so the webview does not treat it as a popup;
-    // the URL is filled in once the reveal returns.
-    const tab = window.open('', '_blank');
+    // Opened synchronously so a desktop browser does not treat it as a popup;
+    // the URL is filled in once the reveal returns. Skipped in MiniPay, which
+    // navigates in place — opening a blank tab there just strands one.
+    const tab = isMiniPay() ? null : window.open('', '_blank');
 
     try {
       const { url } = await revealReward(reward.id, addressRef.current);
@@ -116,8 +137,7 @@ export function useRewards(address) {
       setPending({ ...record, claimed });
       refresh();
 
-      if (tab) tab.location.href = url;
-      else     window.location.href = url;
+      openCashLink(url, tab);
     } catch (err) {
       tab?.close?.();
       throw err;
