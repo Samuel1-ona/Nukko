@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Matter from 'matter-js';
 import { FRUITS, randFruitIdx, resetBag, drawFruitOnCtx } from '../game/fruits.js';
+import { breachOutcome, COLLAPSE_LIMIT } from '../game/collapse.js';
 
 const { Engine, Bodies, Events, Composite, World, Body } = Matter;
 
@@ -33,9 +34,14 @@ const CHAIN_SLOPE      = 0.4;  // multiplier = 1 + (chain - 1) * SLOPE → 3.0x 
 // That budget is finite. Three collapses is the whole allowance; the fourth
 // breach ends the run. Without a cap a player could ride the line forever,
 // since halving never reaches zero — the run only ended when patience did.
+// COLLAPSE_LIMIT and breachOutcome live in game/collapse.js so the rule that
+// decides a run is unit-testable without matter-js and a canvas.
 const COLLAPSE_VAPORIZE  = 4;    // planets removed from the top of the stack
 const COLLAPSE_IMMUNITY  = 1500; // ms — lets debris settle before re-arming
-const COLLAPSE_LIMIT     = 3;    // time slashes allowed; the next breach is fatal
+// The fatal breach gets its own beat: physics freezes mid-fall and the board
+// holds while the containment failure plays out, so the run ends on a moment
+// the player watches rather than a cut to the score screen.
+const FINAL_BREACH_HOLD  = 1500; // ms of freeze-frame before game over
 
 // ── Landing preview helper ────────────────────────────────────────────────────
 // Returns the Y coordinate where a falling fruit of radius `fruitR` centred at
@@ -93,6 +99,8 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
   const shakeFXRef        = useRef(null);
   const bombFXRef         = useRef(null);
   const collapseFXRef     = useRef(null);
+  const finalBreachRef    = useRef(null);  // { startedAt } during the death beat
+  const frozenRef         = useRef(false); // halts Engine.update, keeps rendering
   const expandFXRef       = useRef(null);
   const wallGlowRef       = useRef(null);
   const timeFXRef         = useRef(null);
@@ -163,6 +171,8 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
   // Mirrors collapseCountRef so the HUD can render the remaining budget —
   // a limit the player cannot see is a limit they cannot play around.
   const [collapsesUsed,  setCollapsesUsed]  = useState(0);
+  // True only during the final-breach beat, so the HUD can lock its controls.
+  const [finalBreach,    setFinalBreach]    = useState(false);
   const [containerWidth, setContainerWidth] = useState(BASE_W);
   // Small "+Ns" pulse beside the clock when a merge grants time
   // Signed time change to pulse beside the clock: + from a big merge, − from a
@@ -814,6 +824,81 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
       }
     }
 
+    // ── Final breach: the run-ending beat ────────────────────────────────────
+    // Reads as containment failure rather than another collapse: the danger
+    // line ignites and sweeps the board, the vacuum drains to black, and the
+    // stack sits frozen underneath it. No time figure here — nothing was
+    // spent, the run simply ended.
+    if (finalBreachRef.current) {
+      const fAge = now - finalBreachRef.current.startedAt;
+      const fT   = Math.min(1, fAge / FINAL_BREACH_HOLD);
+
+      // Hard white flash on impact, decaying fast
+      if (fAge < 160) {
+        ctx.save();
+        ctx.globalAlpha = Math.pow(1 - fAge / 160, 1.2) * 0.85;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, cw, H);
+        ctx.restore();
+      }
+
+      // The line itself ignites and thickens
+      const lineGlow = Math.sin(Math.min(1, fAge / 400) * Math.PI * 0.5);
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#ff2020';
+      ctx.lineWidth   = 2 + lineGlow * 7;
+      ctx.shadowBlur  = 30 + lineGlow * 40; ctx.shadowColor = '#ff2020';
+      ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(cw, DANGER_Y); ctx.stroke();
+      ctx.restore();
+
+      // Shockwaves sweeping outward from the line, not imploding — this is a
+      // rupture, the opposite gesture to a survivable collapse.
+      for (let i = 0; i < 3; i++) {
+        const rAge = fAge - i * 150;
+        if (rAge < 0) continue;
+        const rT = Math.min(1, rAge / 900);
+        ctx.save();
+        ctx.globalAlpha = Math.pow(1 - rT, 1.3) * 0.7;
+        ctx.strokeStyle = '#ff4d4d';
+        ctx.lineWidth   = 3 * (1 - rT) + 0.6;
+        ctx.shadowBlur  = 24; ctx.shadowColor = '#ff2020';
+        ctx.beginPath();
+        ctx.ellipse(cw / 2, DANGER_Y, rT * cw * 1.1, rT * H * 0.9, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Vacuum drains to black from the edges inward
+      const vig = ctx.createRadialGradient(cw / 2, H * 0.55, 0, cw / 2, H * 0.55, Math.max(cw, H) * 0.75);
+      vig.addColorStop(0, `rgba(6,0,10,${fT * 0.35})`);
+      vig.addColorStop(1, `rgba(6,0,10,${fT * 0.94})`);
+      ctx.save();
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, cw, H);
+      ctx.restore();
+
+      // Verdict
+      if (fAge > 180) {
+        const tT = Math.min(1, (fAge - 180) / 520);
+        ctx.save();
+        ctx.globalAlpha = tT;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const y = H * 0.42 + (1 - tT) * 14;
+
+        ctx.font = 'bold 34px "Space Mono", monospace';
+        ctx.fillStyle = '#ff3b3b';
+        ctx.shadowBlur = 30; ctx.shadowColor = '#ff2020';
+        ctx.fillText('BREACHED', cw / 2, y);
+
+        ctx.font = 'bold 12px "Nunito", system-ui';
+        ctx.fillStyle = '#ffc9c9';
+        ctx.shadowBlur = 8;
+        ctx.fillText('CONTAINMENT LOST', cw / 2, y + 28);
+        ctx.restore();
+      }
+    }
+
     // ── Danger vignette — gentle, slow pulse once actually over the line ─────
     if (isInDanger) {
       const pulse = 0.18 + 0.1 * Math.sin(now / 520);
@@ -851,7 +936,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
   // the top of the stack instead, leaving the timer as the only fail state.
   // That turns the line from a wall into a dial the player chooses to push.
   const checkCollapse = useCallback(() => {
-    if (gameOverRef.current) return;
+    if (gameOverRef.current || finalBreachRef.current) return;
     const now = Date.now();
     if (now - lastDropTimeRef.current < 500) return;  // grace right after a drop
     if (now < collapseImmuneUntil.current) return;    // debris still settling
@@ -875,13 +960,25 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
       collapsePendingRef.current = false;
       if (!still) return;
 
+      const outcome = breachOutcome(collapseCountRef.current);
+
       // Budget spent: this breach ends the run instead of costing more time.
-      if (collapseCountRef.current >= COLLAPSE_LIMIT) {
-        gameOverRef.current = true;
-        setGameOver(true);
+      if (outcome.fatal) {
+        finalBreachRef.current = { startedAt: Date.now() };
+        frozenRef.current      = true;   // freeze-frame: the board stops dead
+        canDropRef.current     = false;  // no input during the beat
+        canHoldRef.current     = false;
+        setFinalBreach(true);
+        shakeFXRef.current     = { startedAt: Date.now(), intensity: 16, duration: 900 };
         audioRef.current?.stopDanger?.();
         audioRef.current?.playCollapse?.();
-        haptic([90, 40, 90, 40, 140]);
+        haptic([90, 40, 90, 40, 180]);
+        // gameOver is deferred so the FX below actually gets screen time —
+        // setting it now would swap to the score screen on the next frame.
+        setTimeout(() => {
+          gameOverRef.current = true;
+          setGameOver(true);
+        }, FINAL_BREACH_HOLD);
         return;
       }
 
@@ -891,14 +988,14 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
       kill.forEach(t => World.remove(worldRef.current, t));
       bodiesRef.current = bodiesRef.current.filter(b => !kill.includes(b));
 
-      collapseCountRef.current += 1;
-      setCollapsesUsed(collapseCountRef.current);
+      collapseCountRef.current = outcome.collapses;
+      setCollapsesUsed(outcome.collapses);
       collapseImmuneUntil.current = Date.now() + COLLAPSE_IMMUNITY;
 
       // The run continues — the cost is on the clock, not the board. The
       // handler halves the remaining time and reports how much it took so the
       // FX and the HUD can name the exact number.
-      const lost = onCollapseRef.current?.(COLLAPSE_LIMIT - collapseCountRef.current) ?? 0;
+      const lost = onCollapseRef.current?.(outcome.breachesLeft) ?? 0;
       if (lost > 0) setTimeDelta({ amount: -lost, key: Date.now() });
 
       collapseFXRef.current = { startedAt: Date.now(), lost };
@@ -1046,9 +1143,12 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
       const dt  = Math.min(raw, 50); // cap at 50ms to prevent physics explosion
       lastTimeRef.current = now;
 
-      // Delta-time physics: distribute dt across substeps
-      const stepMs = dt / SUB;
-      for (let i = 0; i < SUB; i++) Engine.update(engineRef.current, stepMs);
+      // Delta-time physics: distribute dt across substeps. Skipped entirely
+      // during the final-breach beat so the board holds its last frame.
+      if (!frozenRef.current) {
+        const stepMs = dt / SUB;
+        for (let i = 0; i < SUB; i++) Engine.update(engineRef.current, stepMs);
+      }
 
       render(dt);
       checkCollapse();
@@ -1096,6 +1196,9 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
     shakeFXRef.current        = null;
     bombFXRef.current         = null;
     collapseFXRef.current     = null;
+    finalBreachRef.current    = null;
+    frozenRef.current         = false;
+    setFinalBreach(false);
     expandFXRef.current       = null;
     wallGlowRef.current       = null;
     timeFXRef.current         = null;
@@ -1310,6 +1413,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
 
   // ── Pause / Resume RAF loop (does NOT clear physics world) ─────────────────
   const pauseEngine = useCallback(() => {
+    if (finalBreachRef.current) return; // the death beat plays to the end
     cancelAnimationFrame(gameLoopRef.current);
     audioRef.current?.stopDanger?.();
   }, []);
@@ -1344,6 +1448,7 @@ export function useGame(onScorePts, onToast, onAddTime, audio, themeColors, onMe
     containerWidth,
     collapsesUsed,
     collapseLimit: COLLAPSE_LIMIT,
+    finalBreach,
     startEngine,
     dropFruit,
     swapHold,

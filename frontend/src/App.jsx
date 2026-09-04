@@ -168,7 +168,7 @@ export default function App() {
 
   const {
     canvasRef, nextIdx, nextNextIdx, holdIdx, canHold, chain, timeDelta,
-    gameOver, containerWidth, collapsesUsed, collapseLimit,
+    gameOver, containerWidth, collapsesUsed, collapseLimit, finalBreach,
     startEngine, dropFruit, swapHold, movePointer, stopEngine,
     pauseEngine, resumeEngine,
     activateBomb, expandContainer, triggerTimeFX,
@@ -708,6 +708,7 @@ export default function App() {
           gameOver={gameOver}
           collapsesUsed={collapsesUsed}
           collapseLimit={collapseLimit}
+          finalBreach={finalBreach}
           isGuestMode={isGuestMode}
           guestTrialExpired={guestTrialExpired}
           onConnectWallet={connect}

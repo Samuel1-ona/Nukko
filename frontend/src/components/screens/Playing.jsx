@@ -385,6 +385,7 @@ export default function Playing({
   gameOver,
   collapsesUsed = 0,
   collapseLimit = 3,
+  finalBreach = false,
   isGuestMode,
   guestTrialExpired,
   onConnectWallet,
@@ -410,7 +411,7 @@ export default function Playing({
     else        resumeEngine?.();
   }, [paused, pauseEngine, resumeEngine]);
 
-  const handlePause  = () => !gameOver && setPaused(true);
+  const handlePause  = () => !gameOver && !finalBreach && setPaused(true);
   const handleResume = () => setPaused(false);
 
   const pointerActiveRef = useRef(false);
@@ -537,7 +538,7 @@ export default function Playing({
             {/* Pause button — top-right corner of HUD */}
             <button
               onClick={handlePause}
-              disabled={gameOver}
+              disabled={gameOver || finalBreach}
               className="nk-press-sm"
               style={{
                 position: 'absolute', top: 14, right: 16,
@@ -545,8 +546,8 @@ export default function Playing({
                 background: 'transparent',
                 border: `1px solid ${RULE}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: gameOver ? 'not-allowed' : 'pointer',
-                opacity: gameOver ? 0.35 : 1,
+                cursor: (gameOver || finalBreach) ? 'not-allowed' : 'pointer',
+                opacity: (gameOver || finalBreach) ? 0.35 : 1,
                 zIndex: 2,
               }}
             >
