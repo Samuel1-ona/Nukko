@@ -31,6 +31,9 @@ async function signMessage(walletClient, address, message) {
   throw new Error('No wallet available to sign with');
 }
 
+// A level the curve does not advertise cash for — a test level — has no
+// expected amount. The real figure comes from the pool row that gets drawn.
+const money = (cash) => (cash ? `$${cash.amount} ${cash.token}` : 'from pool');
 const short = (a) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '');
 const date  = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '');
 
@@ -312,7 +315,7 @@ export default function Admin({ onExit, address, walletClient, onConnect }) {
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: '"Space Mono", monospace', fontSize: 12, color: '#fff' }}>{short(g.wallet)}</div>
               <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
-                L{g.level} {g.badge} · ${g.expected?.amount} {g.expected?.token} · {date(g.grantedAt)}
+                L{g.level} {g.badge} · {money(g.expected)} · {date(g.grantedAt)}
               </div>
             </div>
             <Button onClick={() => settle(g.id)} disabled={busy} small>Settle</Button>
@@ -334,7 +337,7 @@ export default function Admin({ onExit, address, walletClient, onConnect }) {
               {short(g.wallet)}
             </div>
             <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 10, color: GREEN }}>
-              L{g.level} · ${g.expected?.amount} {g.expected?.token} · paid {date(g.settledAt)}
+              L{g.level} · {money(g.expected)} · paid {date(g.settledAt)}
             </div>
           </div>
         ))}
