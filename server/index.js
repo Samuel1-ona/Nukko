@@ -109,22 +109,37 @@ app.get('/api/inventory/:wallet', async (req, res) => {
   res.json(created);
 });
 
+// Reports CONSUMPTION only. This used to take absolute values and write them
+// straight to the row, unauthenticated — one request minted unlimited
+// power-ups. Granting is now exclusively credit_inventory(), called by the
+// server after an on-chain payment or a ladder milestone.
+//
+// consume_inventory() clamps every field to LEAST(stored, requested) inside
+// the UPDATE, so a larger number is silently ignored rather than rejected:
+// a client that has drifted high cannot raise its balance, and one that has
+// drifted low still settles at the lower figure, which is the safe direction.
+// The authoritative row comes back so the client can reconcile against it.
 app.patch('/api/inventory/:wallet', async (req, res) => {
   const addr = req.params.wallet.toLowerCase();
-  const allowed = ['free_bombs_left', 'free_expands_left', 'paid_bombs', 'paid_expands'];
-  const fields = {};
-  for (const k of allowed) {
-    if (req.body[k] !== undefined) fields[k] = req.body[k];
-  }
-  fields.updated_at = new Date().toISOString();
 
-  const { error } = await supabase
-    .from('player_inventory')
-    .update(fields)
-    .eq('wallet_address', addr);
+  // Anything that is not a non-negative integer is treated as "not supplied"
+  // rather than trusted — a NULL leaves that column untouched.
+  const count = (v) =>
+    Number.isInteger(v) && v >= 0 ? v : null;
+
+  const { data, error } = await supabase.rpc('consume_inventory', {
+    p_wallet:       addr,
+    p_free_bombs:   count(req.body.free_bombs_left),
+    p_free_expands: count(req.body.free_expands_left),
+    p_paid_bombs:   count(req.body.paid_bombs),
+    p_paid_expands: count(req.body.paid_expands),
+  });
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json({ ok: true });
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return res.status(404).json({ error: 'no inventory for that wallet' });
+  res.json(row);
 });
 
 // ─── Purchases ───────────────────────────────────────────────
