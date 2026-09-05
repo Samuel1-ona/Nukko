@@ -8,6 +8,7 @@ import { useLeaderboard } from './hooks/useLeaderboard.js';
 import { usePurchase }    from './hooks/usePurchase.js';
 import { usePowerUps }   from './hooks/usePowerUps.js';
 import { useLadder }     from './hooks/useLadder.js';
+import { useLadderStandings } from './hooks/useLadderStandings.js';
 import { useRewards }    from './hooks/useRewards.js';
 import { useGasCheck }    from './hooks/useGasCheck.js';
 import { useBgMusic }     from './hooks/useBgMusic.js';
@@ -206,6 +207,7 @@ export default function App() {
   } = usePowerUps(walletClient, address);
 
   const ladderApi  = useLadder(address);
+  const standings  = useLadderStandings();
   const rewardsApi = useRewards(address);
 
   // ── Admin route (hash based — the app has no router) ───────────────────────
@@ -647,6 +649,9 @@ export default function App() {
           entries={leaderboard}
           loading={leaderboardLoading}
           myUsername={profile?.username}
+          myAddress={address}
+          myLevel={ladderApi.ladder?.level}
+          ladder={standings}
         />
       );
       break;
@@ -773,6 +778,7 @@ export default function App() {
         ladder={ladderApi.ladder}
         levels={ladderApi.levels}
         rewards={rewardsApi}
+        standings={standings}
         error={ladderApi.error}
         onRetry={() => ladderApi.sync({ fresh: true })}
       />

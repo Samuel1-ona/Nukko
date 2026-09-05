@@ -29,6 +29,10 @@ export async function updateInventory(walletAddress, fields) {
   });
 }
 
+export async function getLadderStandings(limit = 25) {
+  return api(`/api/ladder/leaderboard?limit=${limit}`);
+}
+
 // ─── Purchases ───────────────────────────────────────────────
 
 export async function recordPurchase({ walletAddress, txHash, itemType, packageIndex, token, amount }) {

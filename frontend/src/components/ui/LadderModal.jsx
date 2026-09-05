@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CheckIcon, WarningIcon, CashIcon, GiftIcon } from './Icons.jsx';
 import { Sheet } from './kit.jsx';
 import { unclaimedByLevel } from '../../rewards/levelLabel.js';
+import LadderStandings from './LadderStandings.jsx';
 import { INK, DIM, FAINT, RULE, BODY } from '../../theme/tokens.js';
 
 const PURPLE = '#7b2fff';
@@ -262,7 +263,7 @@ const STATUS_STYLE = {
   locked:  { label: 'LOCKED',      color: 'rgba(255,255,255,0.3)', bg: 'transparent', border: 'rgba(255,255,255,0.07)' },
 };
 
-function LevelRow({ level, claim, onClaim, claimBusy }) {
+function LevelRow({ level, claim, onClaim, claimBusy, here = 0 }) {
   const s = STATUS_STYLE[level.status] ?? STATUS_STYLE.locked;
 
   return (
@@ -285,11 +286,24 @@ function LevelRow({ level, claim, onClaim, claimBusy }) {
             {level.badge}
           </span>
         </div>
-        <span style={{
-          flexShrink: 0, fontFamily: '"Nunito", system-ui', fontSize: 8, fontWeight: 800,
-          letterSpacing: '0.12em', color: s.color,
-        }}>
-          {s.label}
+        <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+          {here > 0 && (
+            // A rung nobody appears to be on reads as a wall rather than as
+            // somewhere to get to. This is the whole point of the feature.
+            <span style={{
+              fontFamily: '"Space Mono", monospace', fontSize: 8.5, fontWeight: 700,
+              letterSpacing: '0.06em', color: 'rgba(233,224,246,0.4)',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {here} HERE
+            </span>
+          )}
+          <span style={{
+            fontFamily: '"Nunito", system-ui', fontSize: 8, fontWeight: 800,
+            letterSpacing: '0.12em', color: s.color,
+          }}>
+            {s.label}
+          </span>
         </span>
       </div>
 
@@ -326,10 +340,18 @@ function LevelRow({ level, claim, onClaim, claimBusy }) {
   );
 }
 
-function LadderMapView({ levels, claims, onClaim, claimBusy }) {
+function LadderMapView({ levels, claims, onClaim, claimBusy, standings, myLevel }) {
   if (!levels) return null;
   return (
     <div style={{ padding: '14px 20px 4px' }}>
+      {/* Same component as the standings board, smaller variant — the natural
+          place to look once a player is already staring at the rungs. */}
+      <LadderStandings
+        compact
+        distribution={standings?.distribution}
+        players={standings?.players}
+        myLevel={myLevel}
+      />
       <div style={{
         fontFamily: '"Nunito", system-ui', fontSize: 10.5, color: 'rgba(255,255,255,0.45)',
         lineHeight: 1.6, marginBottom: 14,
@@ -348,6 +370,7 @@ function LadderMapView({ levels, claims, onClaim, claimBusy }) {
           claim={claims?.get(l.level)}
           onClaim={onClaim}
           claimBusy={claimBusy}
+          here={standings?.distribution?.[l.level] ?? 0}
         />
       ))}
     </div>
@@ -378,6 +401,14 @@ function RewardsView({ rewards }) {
 
   return (
     <div style={{ padding: '14px 20px 4px' }}>
+      {/* Same component as the standings board, smaller variant — the natural
+          place to look once a player is already staring at the rungs. */}
+      <LadderStandings
+        compact
+        distribution={standings?.distribution}
+        players={standings?.players}
+        myLevel={myLevel}
+      />
       <div style={{
         fontFamily: '"Nunito", system-ui', fontSize: 10.5, color: 'rgba(255,255,255,0.45)',
         lineHeight: 1.6, marginBottom: 14,
@@ -460,7 +491,7 @@ const TABS = [
   { key: 'rewards', label: 'Rewards' },
 ];
 
-export default function LadderModal({ isOpen, onClose, ladder, levels, rewards, error, onRetry }) {
+export default function LadderModal({ isOpen, onClose, ladder, levels, rewards, standings, error, onRetry }) {
   const [tab, setTab] = useState('week');
   const [retrying, setRetrying] = useState(false);
   // Declared here, above the `!isOpen` early return: a hook added below it
@@ -594,7 +625,8 @@ export default function LadderModal({ isOpen, onClose, ladder, levels, rewards, 
         ? <CurrentCard ladder={ladder} claims={claims} onClaim={onClaim} claimBusy={claimBusy} />
         : placeholder('Loading your ladder…'))}
       {tab === 'ladder' && (mapLevels
-        ? <LadderMapView levels={mapLevels} claims={claims} onClaim={onClaim} claimBusy={claimBusy} />
+        ? <LadderMapView levels={mapLevels} claims={claims} onClaim={onClaim} claimBusy={claimBusy}
+                         standings={standings} myLevel={ladder?.level} />
         : placeholder('Loading the ladder…'))}
       {tab === 'rewards' && rewards && <RewardsView rewards={rewards} />}
       <div style={{ height: 24 }} />
