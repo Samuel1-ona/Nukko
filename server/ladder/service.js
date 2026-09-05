@@ -9,7 +9,7 @@ import {
   progressWindowStart, progressWindowEnd,
   levelConfig, LEVELS, MAX_LEVEL,
 } from './rules.js';
-import { isCashMilestone } from './levels.js';
+import { isCashMilestone, MILESTONE_SLOTS } from './levels.js';
 import { syncChainEvents } from '../chain/indexer.js';
 import { verifyPendingPurchases } from '../chain/purchases.js';
 import { issueReward, rewardsConfigured } from '../rewards/client.js';
@@ -72,10 +72,27 @@ async function readCounters(supabase, wallet, weekStart, levelStartedAt) {
   };
 }
 
+// Which milestones still have a funded link. Deliberately a boolean per
+// level, not a count: showing "6 of 10 left" is the strongest lever there is
+// for finishing a level this week, and that is a decision to make on purpose
+// rather than inherit. For now the ladder only admits when a race is over, so
+// it never advertises money it cannot pay.
+async function readSoldOut(supabase) {
+  const levels = Object.keys(MILESTONE_SLOTS).map(Number);
+  const { data, error } = await supabase
+    .from('cash_link_pool')
+    .select('level, assigned_to')
+    .in('level', levels)
+    .is('assigned_to', null);
+  if (error) return new Set();          // never block the ladder on this
+  const free = new Set((data ?? []).map(r => r.level));
+  return new Set(levels.filter(l => !free.has(l)));
+}
+
 async function readGrants(supabase, wallet) {
   const { data, error } = await supabase
     .from('ladder_grants')
-    .select('id, level, bombs, expands, is_cash, cash_pending, settled_at')
+    .select('id, level, bombs, expands, is_cash, cash_pending, cash_unfunded_at, settled_at')
     .eq('wallet_address', wallet);
   if (error) throw new Error(`grants read failed: ${error.message}`);
   return data ?? [];
@@ -125,7 +142,14 @@ export async function settleCashGrant(supabase, wallet, level, grantId) {
 
   const link = Array.isArray(data) ? data[0] : data;
   if (!link) {
-    return { paid: false, reason: 'pool-empty' };   // debt stays cash_pending
+    // The slots ARE the offer. Nothing was promised beyond them, so this is
+    // recorded and closed rather than left as a debt for an admin to settle —
+    // that would turn a fixed seasonal budget into an open one.
+    await supabase.from('ladder_grants').update({
+      cash_pending:     false,
+      cash_unfunded_at: new Date().toISOString(),
+    }).eq('id', grantId);
+    return { paid: false, reason: 'pool-empty', unfunded: true };
   }
 
   try {
@@ -281,17 +305,20 @@ export async function syncLadder(supabase, walletAddress, { write = true, fresh 
 
   // ── Retry debts whose pool was empty when they were earned ───
   if (write) {
-    const pending = (await readGrants(supabase, wallet)).filter(g => g.is_cash && g.cash_pending);
+    // Only genuine debts: a rewards store that was unreachable, or a link
+    // drawn but never delivered. A grant closed as unfunded is not owed.
+    const pending = (await readGrants(supabase, wallet))
+      .filter(g => g.is_cash && g.cash_pending && !g.cash_unfunded_at);
     for (const g of pending) {
       const cash = await settleCashGrant(supabase, wallet, g.level, g.id);
       if (cash.paid) granted.push({ level: g.level, badge: levelConfig(g.level).badge, bombs: 0, expands: 0, cash, backfilled: true });
     }
   }
 
-  return buildView(await readGrants(supabase, wallet), state, counters, result);
+  return buildView(await readGrants(supabase, wallet), state, counters, result, await readSoldOut(supabase));
 }
 
-function buildView(grants, state, counters, result) {
+function buildView(grants, state, counters, result, soldOut = new Set()) {
   const earned = new Set(grants.map(g => g.level));
   const cfg    = levelConfig(state.level);
 
@@ -316,6 +343,7 @@ function buildView(grants, state, counters, result) {
     reward:       cfg.reward,
     // A card already earned in an earlier week pays nothing if re-cleared.
     currentCardPays: !earned.has(state.level),
+    currentCardCashSoldOut: Boolean(cfg.reward.cash) && soldOut.has(state.level),
     atMax:        state.level === MAX_LEVEL,
     held:         result.held,
     justCleared:  result.clearedLevels,
@@ -332,6 +360,8 @@ function buildView(grants, state, counters, result) {
         reward: l.reward,
         status,
         paysReward: !hasGrant,
+        // The season's funded links for this milestone are all taken.
+        cashSoldOut: Boolean(l.reward.cash) && soldOut.has(l.level),
       };
     }),
     grants: grants

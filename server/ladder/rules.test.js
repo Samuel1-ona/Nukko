@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { LEVELS, MAX_LEVEL, OBJECTIVE_KEYS, CASH_LEVELS,
-         CASH_MILESTONES, TEST_CASH_LEVELS, isCashMilestone, poolLevels } from './levels.js';
+         CASH_MILESTONES, TEST_CASH_LEVELS, isCashMilestone, poolLevels,
+         UNIT_PRICE_USD, buysBetween, MILESTONE_SLOTS, SEASON_BUDGET_USD } from './levels.js';
 import {
   weekKey, weeksBetween, meetsObjective, clearsLevel, objectiveProgress,
   climb, applyRollover, atRiskOfDemotion, weeklyLoad,
@@ -49,7 +50,7 @@ test('every level carries a shop objective — the ladder has no free tier', () 
     assert.ok(l.shopItems >= 1, `level ${l.level} has no shop objective`);
   }
   assert.equal(LEVELS[0].shopItems, 2);
-  assert.equal(LEVELS[11].shopItems, 24);
+  assert.equal(LEVELS[11].shopItems, 23);
 });
 
 test('spending is confined to a single objective', () => {
@@ -62,7 +63,7 @@ test('spending is confined to a single objective', () => {
 test('weekly shop cost matches the intended schedule at the cheapest tier', () => {
   // Counters count PURCHASES, not items, so the cheapest route is N single
   // $0.10 buys. This asserts the owner's cost-per-week column.
-  const expected = { 1: '0.20', 4: '0.80', 8: '1.60', 12: '2.40' };
+  const expected = { 1: '0.20', 4: '0.80', 8: '1.40', 12: '2.30' };
   for (const [level, cost] of Object.entries(expected)) {
     const actual = (LEVELS[level - 1].shopItems * 0.10).toFixed(2);
     assert.equal(actual, cost, `level ${level} weekly shop cost`);
@@ -100,7 +101,8 @@ test('the curve is the volume schedule the owner specified', () => {
   // requirement — change them only on purpose.
   LEVELS.forEach((l, i) => {
     assert.equal(l.runs,      (i + 1) * 10, `level ${l.level} games`);
-    assert.equal(l.shopItems, (i + 1) * 2,  `level ${l.level} purchases`);
+    // Purchases are NOT a difficulty dial — they are the price of the next
+    // milestone's payout. See the invariant test below.
     // Points track the observed median run (402) so they land for anyone
     // who actually plays the games, instead of forming a second grind.
     assert.equal(l.points, l.runs * 400, `level ${l.level} points`);
@@ -109,8 +111,8 @@ test('the curve is the volume schedule the owner specified', () => {
   const total = k => LEVELS.reduce((a, l) => a + l[k], 0);
   assert.equal(total('runs'), 780, 'games to clear all twelve rungs');
   assert.equal(total('runs') - LEVELS[11].runs, 660, 'games to reach level 12');
-  assert.equal(total('shopItems'), 156, 'purchases to clear all twelve rungs');
-  assert.equal((total('shopItems') * 0.10).toFixed(2), '15.60', 'minimum spend');
+  assert.equal(total('shopItems'), 150, 'purchases to clear all twelve rungs');
+  assert.equal((total('shopItems') * UNIT_PRICE_USD).toFixed(2), '15.00', 'minimum spend');
 });
 
 // ─── Objectives ──────────────────────────────────────────────
@@ -508,4 +510,72 @@ test('a test level is never advertised as a public milestone', () => {
     assert.ok(!CASH_MILESTONES.has(level), `test level ${level} leaked into the public curve`);
     assert.ok(!CASH_LEVELS.includes(level), `test level ${level} leaked into CASH_LEVELS`);
   }
+});
+
+
+// ─── Cash reward economics ───────────────────────────────────
+// These numbers are economics, not a difficulty dial, and nothing else in the
+// codebase notices when someone edits one. Assert the rule directly.
+
+const STRETCHES = [
+  { from: 1, to: 4,  payout: 4  },
+  { from: 5, to: 8,  payout: 10 },
+  { from: 9, to: 12, payout: 16 },
+];
+
+test('each stretch forces exactly half of the payout it leads to', () => {
+  // THE RULE: a milestone pays twice what the climb to it cost in the shop.
+  for (const { from, to, payout } of STRETCHES) {
+    const spend = buysBetween(from, to) * UNIT_PRICE_USD;
+    assert.ok(
+      Math.abs(spend - payout / 2) < 1e-9,
+      `levels ${from}-${to} force $${spend.toFixed(2)} but lead to a $${payout} payout`,
+    );
+  }
+});
+
+test('a milestone pays for its own stretch only, never the cumulative total', () => {
+  // Paying 2x of everything spent so far would hand a full-ladder climber 3x,
+  // because the earlier milestones already bought that ground.
+  const totalSpend  = buysBetween(1, MAX_LEVEL) * UNIT_PRICE_USD;
+  const totalPayout = STRETCHES.reduce((a, s) => a + s.payout, 0);
+  assert.equal(totalSpend.toFixed(2), '15.00');
+  assert.equal(totalPayout, 30);
+  assert.ok(Math.abs(totalPayout - totalSpend * 2) < 1e-9, 'end to end must be exactly 2x');
+});
+
+test('the stretch payouts are the amounts actually on the cards', () => {
+  // The invariant above is worthless if the curve pays something else.
+  for (const { to, payout } of STRETCHES) {
+    const cash = LEVELS[to - 1].reward.cash;
+    assert.ok(cash, `level ${to} is a milestone but carries no cash`);
+    assert.equal(Number(cash.amount), payout, `level ${to} payout`);
+  }
+  assert.deepEqual(LEVELS.filter(l => l.reward.cash).map(l => l.level), CASH_LEVELS);
+});
+
+test('purchase targets never decrease as levels rise', () => {
+  // A stretch can total correctly while containing a rung that asks for less
+  // than the one below it, which reads as a bug to every player who sees it.
+  for (let i = 1; i < LEVELS.length; i++) {
+    assert.ok(
+      LEVELS[i].shopItems >= LEVELS[i - 1].shopItems,
+      `level ${LEVELS[i].level} asks ${LEVELS[i].shopItems} after ${LEVELS[i - 1].shopItems}`,
+    );
+  }
+});
+
+test('the season budget is the slot count times the payouts', () => {
+  assert.deepEqual(MILESTONE_SLOTS, { 4: 10, 8: 5, 12: 3 });
+  assert.equal(SEASON_BUDGET_USD.toFixed(2), '138.00');
+  // Break-even at $1 net per participating player.
+  assert.equal(Math.ceil(SEASON_BUDGET_USD / 1), 138, 'players needed at $2 average spend');
+});
+
+test('the unit price is the cheapest route to a credit, not the average', () => {
+  // Counters count PURCHASES, not items: a $0.90 ten-pack logs the same single
+  // credit as a $0.10 single, so the cheapest single sets the floor. Anyone
+  // buying bundles spends more per credit and lands below 2x — the rule is a
+  // ceiling on generosity, not a target.
+  assert.equal(UNIT_PRICE_USD, 0.10);
 });

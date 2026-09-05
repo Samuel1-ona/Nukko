@@ -101,7 +101,7 @@ export function adminRoutes(supabase, { settleCashGrant }) {
   r.get('/api/admin/grants', async (_req, res) => {
     const { data, error } = await supabase
       .from('ladder_grants')
-      .select('id, wallet_address, level, cash_pending, granted_at, settled_at')
+      .select('id, wallet_address, level, cash_pending, cash_unfunded_at, granted_at, settled_at')
       .eq('is_cash', true)
       .order('granted_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
@@ -111,11 +111,18 @@ export function adminRoutes(supabase, { settleCashGrant }) {
       badge: levelConfig(g.level).badge,
       expected: levelConfig(g.level).reward.cash,
       grantedAt: g.granted_at, settledAt: g.settled_at,
+      unfunded: Boolean(g.cash_unfunded_at),
     }));
 
     res.json({
-      owed: rows.filter(r => !r.settledAt),
-      paid: rows.filter(r =>  r.settledAt),
+      // Owed means a genuine debt — never a player who simply arrived after
+      // the season's slots were gone. Mixing the two turns a fixed budget
+      // into an open-ended queue an admin feels obliged to clear.
+      owed:     rows.filter(r => !r.settledAt && !r.unfunded),
+      paid:     rows.filter(r =>  r.settledAt),
+      // Not owed. Shown so next season's slot counts can be set from how many
+      // players actually missed out.
+      unfunded: rows.filter(r => !r.settledAt && r.unfunded),
     });
   });
 

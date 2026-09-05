@@ -188,7 +188,7 @@ function CurrentCard({ ladder, claims, onClaim, claimBusy }) {
         }}>
           {!ladder.currentCardPays
             ? 'Already earned'
-            : ladder.reward?.cash ? 'Clearing this pays' : 'Clearing this gives'}
+            : ladder.reward?.cash && !ladder.currentCardCashSoldOut ? 'Clearing this pays' : 'Clearing this gives'}
         </div>
         <div style={{ fontFamily: '"Nunito", system-ui', fontSize: 13, fontWeight: 700, color: '#fff' }}>
           {rewardText(ladder.reward)}
@@ -304,13 +304,17 @@ function LevelRow({ level, claim, onClaim, claimBusy }) {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
         fontFamily: '"Nunito", system-ui', fontSize: 10.5, fontWeight: 700,
-        color: level.reward?.cash ? GOLD : 'rgba(255,255,255,0.55)',
+        color: level.reward?.cash && !level.cashSoldOut ? GOLD : 'rgba(255,255,255,0.55)',
       }}>
-        {level.reward?.cash
+        {level.reward?.cash && !level.cashSoldOut
           ? <CashIcon size={12} color={GOLD} />
           : <GiftIcon size={12} color="rgba(255,255,255,0.55)" />}
         <span>
-          {[rewardText(level.reward), cashText(level.reward)].filter(Boolean).join(' + ')}
+          {[rewardText(level.reward), level.cashSoldOut ? '' : cashText(level.reward)]
+            .filter(Boolean).join(' + ')}
+          {level.cashSoldOut && (
+            <span style={{ color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}> · cash all claimed</span>
+          )}
           {!level.paysReward && (
             <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}> · already earned</span>
           )}
